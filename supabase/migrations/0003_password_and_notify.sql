@@ -1,0 +1,48 @@
+-- Password-protected forms: the hash lives in its own column, never inside
+-- the `settings` JSONB, so it can be excluded from public reads at the
+-- privilege level (not just "we chose not to select it in this query").
+alter table forms add column if not exists password_hash text;
+
+-- Defense in depth: even though our application code never selects this
+-- column for anonymous/public requests, explicitly revoke it so a future
+-- `select *` elsewhere in the app (or a stray query from the SQL editor
+-- run as anon) can't leak it. Only the service role (used server-side in
+-- the verify-password route) can read it.
+revoke select (password_hash) on forms from anon, authenticated;
+
+-- ---------------------------------------------------------------------------
+-- Email notifications on new submissions
+-- ---------------------------------------------------------------------------
+-- This project sends the actual email via a Supabase Edge Function
+-- (supabase/functions/notify-submission), not from Postgres directly.
+-- Wire it up either of two ways:
+--
+-- Option A — Dashboard (simplest, no SQL): Database → Webhooks → Create a
+-- new webhook on `responses`, event = INSERT, target = the deployed
+-- `notify-submission` Edge Function URL.
+--
+-- Option B — SQL, using pg_net (uncomment if you'd rather manage this as
+-- a migration than a dashboard click). Requires the pg_net extension,
+-- which is enabled by default on most Supabase projects.
+--
+-- create extension if not exists pg_net;
+--
+-- create or replace function notify_on_response_insert()
+-- returns trigger as $$
+-- begin
+--   perform net.http_post(
+--     url := 'https://<your-project-ref>.supabase.co/functions/v1/notify-submission',
+--     headers := jsonb_build_object(
+--       'Content-Type', 'application/json',
+--       'Authorization', 'Bearer <your-service-role-or-anon-key>'
+--     ),
+--     body := jsonb_build_object('record', row_to_json(new))
+--   );
+--   return new;
+-- end;
+-- $$ language plpgsql security definer;
+--
+-- drop trigger if exists on_response_insert_notify on responses;
+-- create trigger on_response_insert_notify
+--   after insert on responses
+--   for each row execute function notify_on_response_insert();

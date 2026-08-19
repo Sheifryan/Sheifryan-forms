@@ -1,0 +1,10 @@
+{
+  "recommendations": [
+    "bradlc.vscode-tailwindcss",
+    "dbaeumer.vscode-eslint",
+    "esbenp.prettier-vscode",
+    "supabase.supabase-vscode",
+    "usernamehw.errorlens",
+    "christian-kohler.path-intellisense"
+  ]
+}
