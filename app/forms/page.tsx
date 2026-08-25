@@ -1,9 +1,9 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { AppShell } from "@/components/AppShell";
-import { DashboardClient } from "./DashboardClient";
+import { AllFormsClient } from "./AllFormsClient";
 
-export default async function DashboardPage() {
+export default async function AllFormsPage({ searchParams }: { searchParams: { folder?: string } }) {
   const supabase = createClient();
   const {
     data: { user },
@@ -27,6 +27,11 @@ export default async function DashboardPage() {
   const formRows = forms ?? [];
   const folderRows = folders ?? [];
 
+  // Resolve the active folder from ?folder= ("all" | "none" | valid folder id).
+  const raw = searchParams.folder ?? "all";
+  const folderIds = new Set(folderRows.map((f) => f.id));
+  const activeFolderId = raw === "all" || raw === "none" || folderIds.has(raw) ? raw : "all";
+
   // Per-view form counts for the sidebar badges.
   const folderCounts: { all: number; none: number; [folderId: string]: number } = {
     all: formRows.length,
@@ -35,8 +40,18 @@ export default async function DashboardPage() {
   for (const f of folderRows) folderCounts[f.id] = formRows.filter((x) => x.folder_id === f.id).length;
 
   return (
-    <AppShell active="dashboard" userEmail={user.email} activeFolderId="all" folderCounts={folderCounts}>
-      <DashboardClient forms={formRows} folders={folderRows} responseCounts={responseCounts} />
+    <AppShell
+      active="forms"
+      userEmail={user.email}
+      activeFolderId={activeFolderId}
+      folderCounts={folderCounts}
+    >
+      <AllFormsClient
+        forms={formRows}
+        folders={folderRows}
+        responseCounts={responseCounts}
+        activeFolderId={activeFolderId}
+      />
     </AppShell>
   );
 }

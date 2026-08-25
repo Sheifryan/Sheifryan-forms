@@ -1,11 +1,11 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 
-// Supabase's magic-link email sends people to
-// {emailRedirectTo}?code=xxxxx. This route is that landing point: it
-// exchanges the one-time code for a real session (setting the auth
+// Supabase's post-confirmation redirect lands here with ?code=xxxxx. This
+// route exchanges the one-time code for a real session (setting the auth
 // cookies), then redirects into the app. Without this, the code sits in
 // the URL unused and every page still sees the visitor as logged out.
+// It's used for the email-confirmation (signup) flow and password resets.
 export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url);
   const code = searchParams.get("code");

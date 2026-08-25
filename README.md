@@ -51,7 +51,11 @@ via **Terminal → Run Task**.
    - (Or, if you use the Supabase CLI: `supabase db push`)
 
 3. **Enable email auth** in Supabase → Authentication → Providers (Email is
-   on by default; magic-link sign-in is what this starter uses).
+   on by default). For the fastest, Zoho-style sign-up experience — where a
+   new user lands straight in the dashboard — turn **off** the "Confirm email"
+   toggle under the Email provider's settings. If you leave it on, new users
+   get a confirmation email before they can sign in (the app handles both
+   cases).
 
 4. **Env vars** — copy `.env.local.example` to `.env.local` and fill in:
    - `NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_ANON_KEY` — from
@@ -112,15 +116,17 @@ via **Terminal → Run Task**.
   paginated form. Used by both the builder's live preview and the public
   form page.
 - `components/AppShell.tsx` + `components/FoldersSidebar.tsx` — the app-level
-  sidebar hosts **Folders** (create/rename/delete, per-folder form counts,
-  drag a form card from the dashboard grid onto a folder to file it, with an
-  "Uncategorized" catch-all). Selecting a folder filters the dashboard via
-  `/dashboard?folder=<id>`.
-- `app/dashboard/` — form cards grid (with per-form theme accent and page
-  count), a Zoho-style **template gallery modal** (search, category sidebar
-  with counts, featured row, and a per-template field preview before you
-  create), plus one-click quick-create chips in the hero, and workspace
-  overview stats.
+  sidebar hosts Home, **All forms**, Submissions and Analytics, plus the
+  **Folders** list (create/rename/delete, per-folder form counts, drag a form
+  card onto a folder to file it, with an "Uncategorized" catch-all, and a "+"
+  on each folder to start a new form inside it). Selecting a folder filters the
+  All forms page via `/forms?folder=<id>`.
+- `app/dashboard/` — the **Home** page: a hero with quick-create chips and
+  template gallery modal, a **Recent forms** grid (the 4 most recently updated
+  forms for quick access) linking to `/forms`, workspace overview stats.
+- `app/forms/` — the **All forms** page: every form as a folder-filterable,
+  drag-to-folder grid with create (scoped to the active folder when browsing
+  one), delete, and drag-to-move; uses the shared template gallery modal.
 - `app/api/folders/` — CRUD for folders, owner-scoped via the same RLS
   pattern as forms. Deleting a folder doesn't delete its forms — they fall
   back to Uncategorized automatically (`on delete set null` on

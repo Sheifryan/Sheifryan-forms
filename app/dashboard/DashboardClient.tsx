@@ -1,8 +1,9 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { useState } from "react";
-import { Search, Bell, Plus, ClipboardList, Trash2, Folder } from "lucide-react";
+import { Search, Bell, Plus, ClipboardList, Folder } from "lucide-react";
 import { THEMES, type ThemeKey, type FormField } from "@/lib/schema";
 import { TEMPLATES, type FormTemplate } from "@/lib/templates";
 import { TemplateGallery } from "./TemplateGallery";
@@ -26,13 +27,10 @@ export function DashboardClient({
   forms,
   folders,
   responseCounts,
-  activeFolderId,
 }: {
   forms: FormRow[];
   folders: FolderRow[];
   responseCounts: Record<string, number>;
-  /** "all" | "none" | folder id, derived from /dashboard?folder= by the server. */
-  activeFolderId: string;
 }) {
   const router = useRouter();
   const toast = useToast();
@@ -57,31 +55,15 @@ export function DashboardClient({
     setGalleryOpen(false);
   }
 
-  async function deleteForm(id: string) {
-    const res = await fetch(`/api/forms/${id}`, { method: "DELETE" });
-    if (res.ok) toast.info("Form deleted");
-    else toast.error("Couldn't delete the form");
-    router.refresh();
-  }
-
-  // Carries the dragged form's id so the app-sidebar folder rows (a sibling
-  // subtree) can read it from dataTransfer on drop.
-  function handleFormDragStart(e: React.DragEvent, formId: string) {
-    e.dataTransfer.setData("application/x-form", formId);
-    e.dataTransfer.effectAllowed = "move";
-  }
+  // Most recently updated forms — the server orders by updated_at desc, so the
+  // first four rows are the freshest quick-access targets.
+  const recent = forms.slice(0, 4);
 
   const totalResponses = Object.values(responseCounts).reduce((a, b) => a + b, 0);
   const totalFields = forms.reduce(
     (sum, f) => sum + (f.schema?.fields?.filter((x) => x.type !== "page_break").length ?? 0),
     0
   );
-  const visibleForms =
-    activeFolderId === "all"
-      ? forms
-      : activeFolderId === "none"
-        ? forms.filter((f) => !f.folder_id)
-        : forms.filter((f) => f.folder_id === activeFolderId);
 
   return (
     <div className="min-h-screen">
@@ -134,44 +116,34 @@ export function DashboardClient({
 
         <div className="grid grid-cols-[1fr_280px] gap-6">
 
-          {/* Forms grid */}
+          {/* Recent forms */}
           <div>
             <div className="mb-3.5 flex items-center justify-between">
-              <h3 className="font-display text-[15px] font-semibold text-ink">
-                {activeFolderId === "all"
-                  ? "Your forms"
-                  : activeFolderId === "none"
-                    ? "Uncategorized"
-                    : folders.find((f) => f.id === activeFolderId)?.name}
-              </h3>
-              <span className="font-body text-xs font-semibold text-muted">{visibleForms.length} total</span>
+              <h3 className="font-display text-[15px] font-semibold text-ink">Recent forms</h3>
+              <Link className="font-body text-xs font-semibold text-signal hover:opacity-80" href="/forms">
+                View all forms →
+              </Link>
             </div>
 
-            {visibleForms.length === 0 ? (
+            {recent.length === 0 ? (
               <div className="rounded-xl border border-dashed border-line bg-white p-10 text-center">
                 <ClipboardList className="mx-auto mb-2 text-stone-300" size={22} />
-                <p className="mb-3 font-body text-xs text-muted">
-                  {forms.length === 0 ? "You haven't created any forms yet." : "No forms in this folder yet."}
-                </p>
-                {forms.length === 0 && (
-                  <button
-                    onClick={() => setGalleryOpen(true)}
-                    className="rounded-full bg-signal px-4 py-2 font-body text-xs font-semibold text-white hover:opacity-90"
-                  >
-                    Create your first form
-                  </button>
-                )}
+                <p className="mb-3 font-body text-xs text-muted">You haven&apos;t created any forms yet.</p>
+                <button
+                  onClick={() => setGalleryOpen(true)}
+                  className="rounded-full bg-signal px-4 py-2 font-body text-xs font-semibold text-white hover:opacity-90"
+                >
+                  Create your first form
+                </button>
               </div>
             ) : (
               <div className="grid grid-cols-2 gap-3.5">
-                {visibleForms.map((f) => (
+                {recent.map((f) => (
                   <FormCard
                     key={f.id}
                     form={f}
                     responseCount={responseCounts[f.id] ?? 0}
                     onOpen={() => router.push(`/builder/${f.id}`)}
-                    onDelete={() => deleteForm(f.id)}
-                    onDragStart={(e) => handleFormDragStart(e, f.id)}
                     folderName={folders.find((fo) => fo.id === f.folder_id)?.name}
                   />
                 ))}
@@ -215,15 +187,11 @@ function FormCard({
   form,
   responseCount,
   onOpen,
-  onDelete,
-  onDragStart,
   folderName,
 }: {
   form: FormRow;
   responseCount: number;
   onOpen: () => void;
-  onDelete: () => void;
-  onDragStart: (e: React.DragEvent) => void;
   folderName?: string;
 }) {
   const allFields = form.schema?.fields ?? [];
@@ -234,12 +202,10 @@ function FormCard({
 
   return (
     <div
-      draggable
-      onDragStart={onDragStart}
       onClick={onOpen}
-      className="group cursor-pointer rounded-xl border border-line bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md active:cursor-grabbing"
+      className="group cursor-pointer rounded-xl border border-line bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
     >
-      <div className="mb-2.5 flex items-center justify-between">
+      <div className="mb-2.5">
         <span
           className={`inline-block rounded-full px-2.5 py-0.5 font-body text-[10.5px] font-semibold ${
             isLive ? "bg-emerald-50 text-success" : "bg-stone-100 text-stone-600"
@@ -247,15 +213,6 @@ function FormCard({
         >
           {isLive ? "● Live" : "Draft"}
         </span>
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            onDelete();
-          }}
-          className="rounded p-1 text-stone-300 opacity-0 transition hover:bg-rose-50 hover:text-warn group-hover:opacity-100"
-        >
-          <Trash2 size={13} />
-        </button>
       </div>
       <div className="mb-3 flex h-[68px] flex-col justify-center gap-1.5 rounded-lg bg-paper p-2.5">
         {fieldCount === 0 ? (

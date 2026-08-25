@@ -1,10 +1,11 @@
 import Link from "next/link";
-import { ClipboardList, Home, Inbox, BarChart3 } from "lucide-react";
+import { ClipboardList, Home, Inbox, BarChart3, Files } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { FoldersSidebar } from "./FoldersSidebar";
+import { SignOut } from "./SignOut";
 
 interface Props {
-  active: "dashboard" | "submissions" | "analytics" | "settings";
+  active: "dashboard" | "forms" | "submissions" | "analytics" | "settings";
   userEmail?: string | null;
   /** Active folder view for the sidebar highlight ("all" | "none" | folder id). */
   activeFolderId?: string;
@@ -15,6 +16,7 @@ interface Props {
 
 const NAV = [
   { id: "dashboard", label: "Home", href: "/dashboard", icon: Home },
+  { id: "forms", label: "All forms", href: "/forms", icon: Files },
   { id: "submissions", label: "Submissions", href: "/submissions", icon: Inbox },
   { id: "analytics", label: "Analytics", href: "/analytics", icon: BarChart3 },
 ] as const;
@@ -66,15 +68,16 @@ export async function AppShell({
         <div className="border-t border-line pt-3">
           <div className="flex items-center gap-2 rounded-md px-2 py-1.5">
             <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-signal to-accent2 text-[10px] font-bold text-white">
-              SL
+              {(userEmail ?? "U").slice(0, 2).toUpperCase()}
             </div>
             <div className="font-body text-[12px] leading-tight text-ink">
-              Sheifryan Luwaga
+              <span className="block">{userEmail ?? "User"}</span>
               <span className="block font-body text-[10px] font-normal text-muted">
-                {userEmail ?? "sheifryan@example.com"}
+                {userEmail ?? ""}
               </span>
             </div>
           </div>
+          <SignOut />
         </div>
       </aside>
 

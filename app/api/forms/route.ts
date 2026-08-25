@@ -29,6 +29,19 @@ export async function POST(request: Request) {
   const title = typeof body.title === "string" && body.title.trim() ? body.title.trim() : "Untitled form";
   const fields: FormField[] = Array.isArray(body.fields) ? body.fields : [];
 
+  // Optional folder to create the form in. A folder id is only trusted if it
+  // belongs to the current user (folder ids are not globally unique scopes).
+  let folder_id: string | null = null;
+  if (typeof body.folderId === "string" && body.folderId) {
+    const { data: owned } = await supabase
+      .from("folders")
+      .select("id")
+      .eq("id", body.folderId)
+      .eq("owner_id", user.id)
+      .maybeSingle();
+    if (owned) folder_id = owned.id;
+  }
+
   const { data, error } = await supabase
     .from("forms")
     .insert({
@@ -37,6 +50,7 @@ export async function POST(request: Request) {
       schema: { fields },
       settings: defaultSettings,
       theme: DEFAULT_THEME,
+      folder_id,
     })
     .select("id")
     .single();

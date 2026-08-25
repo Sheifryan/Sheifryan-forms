@@ -1,32 +1,48 @@
 "use client";
 
 import { useState } from "react";
-import { useSearchParams } from "next/navigation";
+import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 
 export function LoginForm() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const [email, setEmail] = useState("");
-  const [sent, setSent] = useState(false);
+  const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const searchParams = useSearchParams();
   const expiredError = searchParams.get("error") === "auth";
 
-  async function sendLink(e: React.FormEvent) {
+  async function signIn(e: React.FormEvent) {
     e.preventDefault();
     setBusy(true);
     setErrorMsg(null);
+
     const supabase = createClient();
-    const { error } = await supabase.auth.signInWithOtp({
+    const { error } = await supabase.auth.signInWithPassword({
       email,
-      options: { emailRedirectTo: `${window.location.origin}/auth/callback` },
+      password,
     });
     setBusy(false);
+
     if (error) {
-      setErrorMsg(error.message);
+      // "Email not confirmed" and "Invalid login credentials" are the two
+      // common cases — turn them into helpful copy instead of raw messages.
+      if (error.message.toLowerCase().includes("not confirmed")) {
+        setErrorMsg(
+          "Your email isn't confirmed yet. Check your inbox for the confirmation link, then sign in again."
+        );
+      } else if (error.message.toLowerCase().includes("invalid login")) {
+        setErrorMsg("Incorrect email or password. Please try again.");
+      } else {
+        setErrorMsg(error.message);
+      }
       return;
     }
-    setSent(true);
+
+    router.push("/dashboard");
+    router.refresh();
   }
 
   return (
@@ -41,37 +57,66 @@ export function LoginForm() {
           </span>
         </div>
         <h1 className="mb-1 font-display text-xl text-ink">Sign in</h1>
-        <p className="mb-6 font-body text-sm text-muted">We&apos;ll email you a magic link.</p>
+        <p className="mb-6 font-body text-sm text-muted">
+          Use your EasyForm account to continue.
+        </p>
 
-        {expiredError && !sent && (
+        {expiredError && (
           <p className="mb-4 rounded-md bg-rose-50 px-3 py-2 font-body text-xs text-warn">
-            That link expired or was already used. Request a new one below.
+            That link expired or was already used. Sign in with your email and
+            password below.
           </p>
         )}
 
-        {errorMsg && <p className="mb-4 rounded-md bg-rose-50 px-3 py-2 font-body text-xs text-warn">{errorMsg}</p>}
+        {errorMsg && (
+          <p className="mb-4 rounded-md bg-rose-50 px-3 py-2 font-body text-xs text-warn">
+            {errorMsg}
+          </p>
+        )}
 
-        {sent ? (
-          <p className="font-body text-sm text-signal">Check your inbox for a sign-in link.</p>
-        ) : (
-          <form onSubmit={sendLink} className="space-y-3">
+        <form onSubmit={signIn} className="space-y-3">
+          <div className="space-y-1">
+            <label className="font-body text-xs font-medium text-muted">Email</label>
             <input
               type="email"
               required
+              autoComplete="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="you@example.com"
               className="w-full rounded border border-line px-3 py-2 font-body text-sm outline-none focus:border-signal focus:ring-1 focus:ring-signal"
             />
-            <button
-              type="submit"
-              disabled={busy}
-              className="w-full rounded bg-signal px-4 py-2 font-body text-sm font-medium text-white transition hover:opacity-90 disabled:opacity-50"
-            >
-              {busy ? "Sending…" : "Send magic link"}
-            </button>
-          </form>
-        )}
+          </div>
+          <div className="space-y-1">
+            <div className="flex items-center justify-between">
+              <label className="font-body text-xs font-medium text-muted">Password</label>
+              <span className="font-body text-xs text-line">Required</span>
+            </div>
+            <input
+              type="password"
+              required
+              autoComplete="current-password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="Your password"
+              className="w-full rounded border border-line px-3 py-2 font-body text-sm outline-none focus:border-signal focus:ring-1 focus:ring-signal"
+            />
+          </div>
+          <button
+            type="submit"
+            disabled={busy}
+            className="w-full rounded bg-signal px-4 py-2 font-body text-sm font-medium text-white transition hover:opacity-90 disabled:opacity-50"
+          >
+            {busy ? "Signing in…" : "Sign in"}
+          </button>
+        </form>
+
+        <p className="mt-5 text-center font-body text-sm text-muted">
+          New to EasyForm?{" "}
+          <Link href="/signup" className="font-medium text-signal hover:underline">
+            Create an account
+          </Link>
+        </p>
       </div>
     </div>
   );

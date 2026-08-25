@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Folder, FolderOpen, FolderPlus, LayoutGrid, Pencil, X } from "lucide-react";
+import { Folder, FolderOpen, FolderPlus, LayoutGrid, Pencil, Plus, X } from "lucide-react";
 import { useToast } from "@/components/Toast";
 
 interface FolderRow {
@@ -19,7 +19,7 @@ interface Props {
 }
 
 // Folders live in the app sidebar. Selecting a folder navigates to
-// /dashboard?folder=<id> so the active state survives refresh + back.
+// /forms?folder=<id> so the active state survives refresh + back.
 export function FoldersSidebar({ folders, activeFolderId, counts }: Props) {
   const router = useRouter();
   const [items, setItems] = useState<FolderRow[]>(folders);
@@ -32,9 +32,9 @@ export function FoldersSidebar({ folders, activeFolderId, counts }: Props) {
   useEffect(() => setItems(folders), [folders]);
 
   function select(folderId: string) {
-    if (folderId === "all") router.push("/dashboard");
-    else if (folderId === "none") router.push("/dashboard?folder=none");
-    else router.push(`/dashboard?folder=${encodeURIComponent(folderId)}`);
+    if (folderId === "all") router.push("/forms");
+    else if (folderId === "none") router.push("/forms?folder=none");
+    else router.push(`/forms?folder=${encodeURIComponent(folderId)}`);
   }
 
   async function createFolder(e: React.FormEvent) {
@@ -53,6 +53,23 @@ export function FoldersSidebar({ folders, activeFolderId, counts }: Props) {
     router.refresh();
   }
 
+  // Creates a form inside a specific folder and jumps straight into the builder.
+  async function createFormInFolder(folderId: string) {
+    const res = await fetch("/api/forms", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ title: "Untitled form", folderId }),
+    });
+    const data = await res.json();
+    if (data.id) {
+      const folderName = items.find((i) => i.id === folderId)?.name ?? "folder";
+      toast.success("Form created", { description: `Added to “${folderName}”.` });
+      router.push(`/builder/${data.id}`);
+    } else {
+      toast.error("Couldn't create the form");
+    }
+  }
+
   async function renameFolder(id: string, name: string) {
     const res = await fetch(`/api/folders/${id}`, {
       method: "PATCH",
@@ -68,7 +85,7 @@ export function FoldersSidebar({ folders, activeFolderId, counts }: Props) {
     const res = await fetch(`/api/folders/${id}`, { method: "DELETE" });
     if (res.ok) toast.warning("Folder deleted");
     else toast.error("Couldn't delete the folder");
-    if (activeFolderId === id) router.push("/dashboard");
+    if (activeFolderId === id) router.push("/forms");
     else router.refresh();
   }
 
@@ -164,11 +181,12 @@ export function FoldersSidebar({ folders, activeFolderId, counts }: Props) {
             isDropTarget={dragOver === folder.id}
             onRename={(name) => renameFolder(folder.id, name)}
             onDelete={() => deleteFolder(folder.id)}
+            onNewForm={() => createFormInFolder(folder.id)}
           />
         ))}
       </div>
       <p className="mt-3 px-1 font-body text-[10.5px] leading-snug text-muted">
-        Drag a form card onto a folder to move it.
+        Drag a form card onto a folder to move it. Hover a folder and hit “+” to start a new form inside it.
       </p>
     </div>
   );
@@ -184,6 +202,7 @@ function FolderRow({
   isDropTarget,
   onRename,
   onDelete,
+  onNewForm,
 }: {
   label: string;
   count?: number;
@@ -195,6 +214,7 @@ function FolderRow({
   isDropTarget: boolean;
   onRename?: (name: string) => void;
   onDelete?: () => void;
+  onNewForm?: () => void;
 }) {
   const [editing, setEditing] = useState(false);
   const [value, setValue] = useState(label);
@@ -236,6 +256,18 @@ function FolderRow({
       <Icon size={13} className={active ? "text-signal" : "text-muted"} />
       <span className="flex-1 truncate">{label}</span>
       {count !== undefined && <span className="text-[10.5px] text-muted">{count}</span>}
+      {onNewForm && (
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onNewForm();
+          }}
+          title={`Create form in ${label}`}
+          className="hidden rounded p-0.5 text-muted hover:bg-stone-200 group-hover:block"
+        >
+          <Plus size={11} />
+        </button>
+      )}
       {onRename && (
         <button
           onClick={(e) => {
