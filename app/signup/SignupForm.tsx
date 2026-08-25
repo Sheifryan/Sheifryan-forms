@@ -43,7 +43,11 @@ export function SignupForm() {
     setBusy(false);
 
     if (error) {
-      setErrorMsg(error.message);
+      const msg =
+        error?.message && error.message !== "{}"
+          ? error.message
+          : `Sign up failed (${error?.status ?? "unknown"}). Please check your Supabase email settings — if "Confirm email" is on, make sure email delivery (SMTP/sender) is configured.`;
+      setErrorMsg(msg);
       return;
     }
 

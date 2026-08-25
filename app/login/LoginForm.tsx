@@ -36,7 +36,11 @@ export function LoginForm() {
       } else if (error.message.toLowerCase().includes("invalid login")) {
         setErrorMsg("Incorrect email or password. Please try again.");
       } else {
-        setErrorMsg(error.message);
+        setErrorMsg(
+          error?.message && error.message !== "{}"
+            ? error.message
+            : `Sign in failed (${error?.status ?? "unknown"}).`
+        );
       }
       return;
     }
