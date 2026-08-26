@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useState } from "react";
 import { Search, Bell, Plus, ClipboardList, Folder } from "lucide-react";
-import { THEMES, type ThemeKey, type FormField } from "@/lib/schema";
+import { THEMES, DEFAULT_THEME, type ThemeKey, type FormField } from "@/lib/schema";
 import { TEMPLATES, type FormTemplate } from "@/lib/templates";
 import { TemplateGallery } from "./TemplateGallery";
 import { useToast } from "@/components/Toast";
@@ -88,9 +88,9 @@ export function DashboardClient({
 
       <div className="p-7">
         {/* hero */}
-        <div className="relative mb-7 overflow-hidden rounded-2xl bg-gradient-to-br from-signal via-indigo-500 to-accent2 p-8 text-white">
+        <div className="relative mb-7 overflow-hidden rounded-2xl bg-gradient-to-br from-signal via-violet-600 to-accent2 p-8 text-white">
           <h2 className="mb-1.5 font-display text-xl font-semibold">Create your next form</h2>
-          <p className="mb-5 max-w-md font-body text-[13px] text-indigo-50">
+          <p className="mb-5 max-w-md font-body text-[13px] text-violet-100">
             Start from a blank form, or pick a template to get going in seconds.
           </p>
           <div className="flex flex-wrap gap-2">
@@ -198,7 +198,7 @@ function FormCard({
   const fieldCount = allFields.filter((f) => f.type !== "page_break").length;
   const pageCount = allFields.filter((f) => f.type === "page_break").length + 1;
   const isLive = form.status === "published";
-  const themeHex = THEMES[(form.theme as ThemeKey) ?? "indigo"]?.hex ?? THEMES.indigo.hex;
+  const themeHex = THEMES[(form.theme as ThemeKey) ?? DEFAULT_THEME]?.hex ?? THEMES[DEFAULT_THEME].hex;
 
   return (
     <div

@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Plus, ClipboardList, Trash2, Folder, ArrowLeft } from "lucide-react";
-import { THEMES, type ThemeKey, type FormField } from "@/lib/schema";
+import { THEMES, DEFAULT_THEME, type ThemeKey, type FormField } from "@/lib/schema";
 import { TEMPLATES, type FormTemplate } from "@/lib/templates";
 import { TemplateGallery } from "../dashboard/TemplateGallery";
 import { useToast } from "@/components/Toast";
@@ -200,7 +200,7 @@ function FormCard({
   const fieldCount = allFields.filter((f) => f.type !== "page_break").length;
   const pageCount = allFields.filter((f) => f.type === "page_break").length + 1;
   const isLive = form.status === "published";
-  const themeHex = THEMES[(form.theme as ThemeKey) ?? "indigo"]?.hex ?? THEMES.indigo.hex;
+  const themeHex = THEMES[(form.theme as ThemeKey) ?? DEFAULT_THEME]?.hex ?? THEMES[DEFAULT_THEME].hex;
 
   return (
     <div

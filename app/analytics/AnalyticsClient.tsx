@@ -86,7 +86,7 @@ export function AnalyticsClient({
                 {counts.map((c, i) => (
                   <div key={i} className="flex-1 text-center">
                     <div
-                      className="mx-auto rounded-t-md bg-gradient-to-t from-signal to-indigo-400"
+                      className="mx-auto rounded-t-md bg-gradient-to-t from-signal to-violet-500"
                       style={{ height: `${Math.max(6, (c / max) * 130)}px` }}
                     />
                     <span className="mt-1.5 block font-mono text-[10px] text-muted">{DAYS[i]}</span>

@@ -10,9 +10,9 @@ const config: Config = {
         panel: "#FFFFFF",
         line: "#E2E8F0", // slate-200
         muted: "#94A3B8", // slate-400
-        signal: "#4F46E5", // indigo-600 — primary accent
-        signalSoft: "#EEF2FF", // indigo-50
-        accent2: "#D946EF", // fuchsia-500 — secondary accent (gradients, avatars)
+        signal: "#6D28D9", // violet-700 — primary accent (Royal Plum)
+        signalSoft: "#B69CFB", // soft lavender-violet tint
+        accent2: "#C026D3", // fuchsia-600 — secondary accent (gradients, avatars)
         success: "#059669", // emerald-600
         warn: "#E11D48", // rose-600
       },

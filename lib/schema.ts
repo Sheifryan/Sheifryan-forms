@@ -110,13 +110,14 @@ export const defaultSettings: FormSettings = {
 // than pre-baked Tailwind class strings, so any component can opt in with
 // e.g. className="bg-[var(--accent)]" regardless of which theme is active.
 export const THEMES = {
+  plum: { label: "Plum", hex: "#6D28D9" },
   indigo: { label: "Indigo", hex: "#4F46E5" },
   teal: { label: "Teal", hex: "#0D9488" },
   rose: { label: "Rose", hex: "#E11D48" },
   amber: { label: "Amber", hex: "#F59E0B" },
 } as const;
 export type ThemeKey = keyof typeof THEMES;
-export const DEFAULT_THEME: ThemeKey = "indigo";
+export const DEFAULT_THEME: ThemeKey = "plum";
 
 // Split a flat field list into pages at each page_break marker. The first
 // page has no explicit title (falls back to the form title in the UI).
