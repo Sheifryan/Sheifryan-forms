@@ -48,7 +48,7 @@ export function AppHeader({ title, greeting = false, userEmail }: Props) {
   const initials = (userEmail ?? "U").slice(0, 2).toUpperCase();
 
   return (
-    <div className="flex items-center justify-between border-b border-line bg-white px-7 py-4">
+    <div className="relative z-10 flex items-center justify-between border-b border-line bg-white px-7 py-4">
       <div>
         <p className="mb-0.5 font-mono text-[11px] font-semibold uppercase tracking-wide text-muted">
           Workspace
