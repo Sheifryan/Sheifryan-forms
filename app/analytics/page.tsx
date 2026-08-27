@@ -13,6 +13,7 @@ export default async function AnalyticsPage({ searchParams }: { searchParams: { 
   const { data: forms } = await supabase
     .from("forms")
     .select("id, title, schema")
+    .eq("owner_id", user.id)
     .order("updated_at", { ascending: false });
 
   const activeFormId = searchParams.form ?? forms?.[0]?.id ?? null;

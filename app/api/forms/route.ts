@@ -12,6 +12,7 @@ export async function GET() {
   const { data, error } = await supabase
     .from("forms")
     .select("id, title, status, updated_at, created_at")
+    .eq("owner_id", user.id)
     .order("updated_at", { ascending: false });
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });

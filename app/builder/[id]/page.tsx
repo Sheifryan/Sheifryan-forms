@@ -15,6 +15,7 @@ export default async function BuilderPage({ params }: { params: { id: string } }
     .from("forms")
     .select("id, title, schema, owner_id, status, settings, theme")
     .eq("id", params.id)
+    .eq("owner_id", user.id)
     .single();
 
   if (!form || form.owner_id !== user.id) notFound();

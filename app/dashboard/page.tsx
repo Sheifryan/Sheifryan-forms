@@ -13,11 +13,13 @@ export default async function DashboardPage() {
   const { data: forms } = await supabase
     .from("forms")
     .select("id, title, status, schema, theme, folder_id, updated_at")
+    .eq("owner_id", user.id)
     .order("updated_at", { ascending: false });
 
   const { data: folders } = await supabase.from("folders").select("id, name").order("created_at", { ascending: true });
 
-  // Response counts per form, in one query rather than N+1.
+  // Response counts per form — RLS already restricts responses to the current
+  // user's own forms, so this only ever counts the owner's submissions.
   const { data: responseRows } = await supabase.from("responses").select("form_id");
   const responseCounts: Record<string, number> = {};
   (responseRows ?? []).forEach((r) => {

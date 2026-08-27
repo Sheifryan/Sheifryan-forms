@@ -17,10 +17,16 @@ interface UpdateBody {
 
 export async function GET(_: Request, { params }: { params: { id: string } }) {
   const supabase = createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
   const { data, error } = await supabase
     .from("forms")
     .select("id, owner_id, title, description, schema, schema_version, settings, status, theme, created_at, updated_at")
     .eq("id", params.id)
+    .eq("owner_id", user.id)
     .single();
 
   if (error) return NextResponse.json({ error: error.message }, { status: 404 });
@@ -56,7 +62,7 @@ export async function PATCH(request: Request, { params }: { params: { id: string
   // Bump schema_version whenever the field structure changes, so existing
   // responses stay tied to the shape they were actually submitted against.
   if (body.bumpVersion) {
-    const { data: current } = await supabase.from("forms").select("schema_version").eq("id", params.id).single();
+    const { data: current } = await supabase.from("forms").select("schema_version").eq("id", params.id).eq("owner_id", user.id).single();
     update.schema_version = (current?.schema_version ?? 1) + 1;
   }
 

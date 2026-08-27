@@ -13,6 +13,7 @@ export default async function AllFormsPage({ searchParams }: { searchParams: { f
   const { data: forms } = await supabase
     .from("forms")
     .select("id, title, status, schema, theme, folder_id, updated_at")
+    .eq("owner_id", user.id)
     .order("updated_at", { ascending: false });
 
   const { data: folders } = await supabase.from("folders").select("id, name").order("created_at", { ascending: true });
