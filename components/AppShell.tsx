@@ -2,10 +2,14 @@ import Link from "next/link";
 import { ClipboardList, Home, Inbox, BarChart3, Files } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { FoldersSidebar } from "./FoldersSidebar";
-import { SignOut } from "./SignOut";
+import { AppHeader } from "./AppHeader";
 
 interface Props {
   active: "dashboard" | "forms" | "submissions" | "analytics" | "settings";
+  /** Header title for the page. */
+  title: string;
+  /** When true, the header shows a time-based greeting instead of `title`. */
+  greeting?: boolean;
   userEmail?: string | null;
   /** Active folder view for the sidebar highlight ("all" | "none" | folder id). */
   activeFolderId?: string;
@@ -23,6 +27,8 @@ const NAV = [
 
 export async function AppShell({
   active,
+  title,
+  greeting = false,
   userEmail,
   activeFolderId = "all",
   folderCounts,
@@ -64,24 +70,12 @@ export async function AppShell({
         <div className="mt-4 min-h-0 flex-1 overflow-y-auto border-t border-line pt-4 pb-2">
           <FoldersSidebar folders={folders ?? []} activeFolderId={activeFolderId} counts={folderCounts} />
         </div>
-
-        <div className="border-t border-line pt-3">
-          <div className="flex items-center gap-2 rounded-md px-2 py-1.5">
-            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-signal to-accent2 text-[10px] font-bold text-white">
-              {(userEmail ?? "U").slice(0, 2).toUpperCase()}
-            </div>
-            <div className="font-body text-[12px] leading-tight text-ink">
-              <span className="block">{userEmail ?? "User"}</span>
-              <span className="block font-body text-[10px] font-normal text-muted">
-                {userEmail ?? ""}
-              </span>
-            </div>
-          </div>
-          <SignOut />
-        </div>
       </aside>
 
-      <div className="min-w-0 flex-1">{children}</div>
+      <div className="min-w-0 flex-1">
+        <AppHeader title={title} greeting={greeting} userEmail={userEmail} />
+        {children}
+      </div>
     </div>
   );
 }

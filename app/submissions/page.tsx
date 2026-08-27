@@ -28,7 +28,7 @@ export default async function SubmissionsPage({ searchParams }: { searchParams: 
   }
 
   return (
-    <AppShell active="submissions" userEmail={user.email}>
+    <AppShell active="submissions" title="Submissions" userEmail={user.email}>
       <SubmissionsClient forms={forms ?? []} activeFormId={activeFormId} responses={responses} />
     </AppShell>
   );

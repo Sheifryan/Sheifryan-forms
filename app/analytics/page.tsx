@@ -28,7 +28,7 @@ export default async function AnalyticsPage({ searchParams }: { searchParams: { 
   }
 
   return (
-    <AppShell active="analytics" userEmail={user.email}>
+    <AppShell active="analytics" title="Analytics" userEmail={user.email}>
       <AnalyticsClient forms={forms ?? []} activeFormId={activeFormId} responses={responses} />
     </AppShell>
   );

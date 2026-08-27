@@ -76,8 +76,7 @@ export function SubmissionsClient({
 
   return (
     <div className="p-7">
-      <div className="mb-1 flex items-center justify-between">
-        <h1 className="font-display text-xl font-semibold tracking-tight text-ink">Submissions</h1>
+      <div className="mb-1 flex items-center justify-end">
         <button
           onClick={exportCsv}
           disabled={!activeForm || filtered.length === 0}

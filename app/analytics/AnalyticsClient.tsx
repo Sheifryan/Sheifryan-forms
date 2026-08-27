@@ -43,7 +43,6 @@ export function AnalyticsClient({
 
   return (
     <div className="p-7">
-      <h1 className="mb-1 font-display text-xl font-semibold tracking-tight text-ink">Analytics</h1>
       <div className="mb-5 flex items-center gap-2 font-body text-xs text-muted">
         <span className="font-semibold text-ink">Form:</span>
         <select

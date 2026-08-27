@@ -91,23 +91,6 @@ export function AllFormsClient({
 
   return (
     <div className="min-h-screen">
-      {/* top bar */}
-      <div className="flex items-center justify-between border-b border-line bg-white px-7 py-4">
-        <div>
-          <p className="mb-0.5 font-mono text-[11px] font-semibold uppercase tracking-wide text-muted">Workspace</p>
-          <h1 className="font-display text-xl font-semibold tracking-tight text-ink">{heading}</h1>
-        </div>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => setGalleryOpen(true)}
-            disabled={busy}
-            className="flex items-center gap-1.5 rounded-full bg-signal px-4 py-2 font-body text-xs font-semibold text-white transition hover:opacity-90 disabled:opacity-50"
-          >
-            <Plus size={14} /> New form
-          </button>
-        </div>
-      </div>
-
       <div className="p-7">
         {/* folder banner when scoped to a folder */}
         {activeFolderId !== "all" && (
@@ -131,6 +114,13 @@ export function AllFormsClient({
 
         <div className="mb-3.5 flex items-center justify-between">
           <span className="font-body text-xs font-semibold text-muted">{visibleForms.length} total</span>
+          <button
+            onClick={() => setGalleryOpen(true)}
+            disabled={busy}
+            className="flex items-center gap-1.5 rounded-full bg-signal px-4 py-2 font-body text-xs font-semibold text-white transition hover:opacity-90 disabled:opacity-50"
+          >
+            <Plus size={14} /> New form
+          </button>
         </div>
 
         {visibleForms.length === 0 ? (

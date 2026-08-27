@@ -32,6 +32,13 @@ export default async function AllFormsPage({ searchParams }: { searchParams: { f
   const folderIds = new Set(folderRows.map((f) => f.id));
   const activeFolderId = raw === "all" || raw === "none" || folderIds.has(raw) ? raw : "all";
 
+  const headingTitle =
+    activeFolderId === "all"
+      ? "All forms"
+      : activeFolderId === "none"
+        ? "Uncategorized"
+        : folderRows.find((f) => f.id === activeFolderId)?.name ?? "Folder";
+
   // Per-view form counts for the sidebar badges.
   const folderCounts: { all: number; none: number; [folderId: string]: number } = {
     all: formRows.length,
@@ -42,6 +49,7 @@ export default async function AllFormsPage({ searchParams }: { searchParams: { f
   return (
     <AppShell
       active="forms"
+      title={headingTitle}
       userEmail={user.email}
       activeFolderId={activeFolderId}
       folderCounts={folderCounts}

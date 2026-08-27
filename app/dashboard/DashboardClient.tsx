@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useState } from "react";
-import { Search, Bell, Plus, ClipboardList, Folder } from "lucide-react";
+import { Plus, ClipboardList, Folder } from "lucide-react";
 import { THEMES, DEFAULT_THEME, type ThemeKey, type FormField } from "@/lib/schema";
 import { TEMPLATES, type FormTemplate } from "@/lib/templates";
 import { TemplateGallery } from "./TemplateGallery";
@@ -67,33 +67,21 @@ export function DashboardClient({
 
   return (
     <div className="min-h-screen">
-      {/* top bar */}
-      <div className="flex items-center justify-between border-b border-line bg-white px-7 py-4">
-        <div>
-          <p className="mb-0.5 font-mono text-[11px] font-semibold uppercase tracking-wide text-muted">Workspace</p>
-          <h1 className="font-display text-xl font-semibold tracking-tight text-ink">Good morning</h1>
-        </div>
-        <div className="flex items-center gap-2">
-          <IconBtn icon={Search} />
-          <IconBtn icon={Bell} />
-          <button
-            onClick={() => setGalleryOpen(true)}
-            disabled={busy}
-            className="flex items-center gap-1.5 rounded-full bg-signal px-4 py-2 font-body text-xs font-semibold text-white transition hover:opacity-90 disabled:opacity-50"
-          >
-            <Plus size={14} /> New form
-          </button>
-        </div>
-      </div>
-
       <div className="p-7">
-        {/* hero */}
+        {/* create new form */}
         <div className="relative mb-7 overflow-hidden rounded-2xl bg-gradient-to-br from-signal via-violet-600 to-accent2 p-8 text-white">
           <h2 className="mb-1.5 font-display text-xl font-semibold">Create your next form</h2>
           <p className="mb-5 max-w-md font-body text-[13px] text-violet-100">
             Start from a blank form, or pick a template to get going in seconds.
           </p>
           <div className="flex flex-wrap gap-2">
+            <button
+              onClick={() => setGalleryOpen(true)}
+              disabled={busy}
+              className="flex items-center gap-1.5 rounded-full bg-white px-4 py-2 font-body text-xs font-semibold text-signal transition hover:bg-violet-50 disabled:opacity-50"
+            >
+              <Plus size={14} /> Create new form
+            </button>
             {TEMPLATES.filter((t) => t.featured)
               .slice(0, 4)
               .map((t) => (
@@ -243,10 +231,3 @@ function FormCard({
   );
 }
 
-function IconBtn({ icon: Icon }: { icon: typeof Search }) {
-  return (
-    <button className="flex h-8 w-8 items-center justify-center rounded-md border border-line text-muted transition hover:bg-paper">
-      <Icon size={15} />
-    </button>
-  );
-}

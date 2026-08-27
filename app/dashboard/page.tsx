@@ -35,7 +35,14 @@ export default async function DashboardPage() {
   for (const f of folderRows) folderCounts[f.id] = formRows.filter((x) => x.folder_id === f.id).length;
 
   return (
-    <AppShell active="dashboard" userEmail={user.email} activeFolderId="all" folderCounts={folderCounts}>
+    <AppShell
+      active="dashboard"
+      title="Home"
+      greeting
+      userEmail={user.email}
+      activeFolderId="all"
+      folderCounts={folderCounts}
+    >
       <DashboardClient forms={formRows} folders={folderRows} responseCounts={responseCounts} />
     </AppShell>
   );
