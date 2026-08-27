@@ -2,6 +2,7 @@
 
 import { useState, useCallback, useEffect, useRef } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { nanoid } from "nanoid";
 import {
   DndContext,
@@ -136,6 +137,8 @@ export function FormBuilder({
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved">("idle");
   const [status, setStatus] = useState(initialStatus);
   const toast = useToast();
+  const router = useRouter();
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
   const accent = THEMES[theme]?.hex ?? THEMES[DEFAULT_THEME].hex;
@@ -222,7 +225,25 @@ export function FormBuilder({
   }
 
   function handleDragOver(event: DragOverEvent) {
+    const { active, over } = event;
     setOverId(event.over ? String(event.over.id) : null);
+
+    if (!over) return;
+    const activeId = String(active.id);
+    const overId = String(over.id);
+
+    // Live-reorder existing fields while dragging so the dragged row slides to
+    // the correct above/below position. Palette items (new fields) are not
+    // reordered here — they get inserted on drop in handleDragEnd.
+    if (activeId.startsWith("palette-") || overId.startsWith("palette-")) return;
+    if (activeId === overId) return;
+
+    setFields((prev) => {
+      const oldIndex = prev.findIndex((f) => f.id === activeId);
+      const newIndex = prev.findIndex((f) => f.id === overId);
+      if (oldIndex === -1 || newIndex === -1) return prev;
+      return arrayMove(prev, oldIndex, newIndex);
+    });
   }
 
   function handleDragEnd(event: DragEndEvent) {
@@ -238,8 +259,10 @@ export function FormBuilder({
       const type = String(active.id).replace("palette-", "") as FieldType;
       const field = blankField(type);
       setFields((prev) => {
+        // Insert AFTER the hovered field so a new field drops below the one
+        // you're dropping it on (appends to the end when there's no target).
         const overIndex = over ? prev.findIndex((f) => f.id === over.id) : -1;
-        const insertAt = overIndex === -1 ? prev.length : overIndex;
+        const insertAt = overIndex === -1 ? prev.length : overIndex + 1;
         const next = [...prev];
         next.splice(insertAt, 0, field);
         return next;
@@ -248,11 +271,13 @@ export function FormBuilder({
       return;
     }
 
-    // Reordering an existing field.
+    // Reordering an existing field. The array is already kept in sync live by
+    // handleDragOver; this also covers the case where no reorder fired.
     if (!over || active.id === over.id) return;
     setFields((prev) => {
       const oldIndex = prev.findIndex((f) => f.id === active.id);
       const newIndex = prev.findIndex((f) => f.id === over.id);
+      if (oldIndex === -1 || newIndex === -1) return prev;
       return arrayMove(prev, oldIndex, newIndex);
     });
   }
@@ -284,6 +309,18 @@ export function FormBuilder({
       toast.info("Form unpublished", {
         description: "Respondents can no longer submit responses.",
       });
+    }
+  }
+
+  async function deleteForm() {
+    const res = await fetch(`/api/forms/${formId}`, { method: "DELETE" });
+    if (res.ok) {
+      toast.success("Form deleted");
+      router.push("/dashboard");
+      router.refresh();
+    } else {
+      toast.error("Couldn't delete the form");
+      setConfirmDelete(false);
     }
   }
 
@@ -323,6 +360,24 @@ export function FormBuilder({
           <span className="font-mono text-xs text-muted">
             {saveState === "saving" ? "Saving…" : saveState === "saved" ? "Saved" : ""}
           </span>
+          <button
+            onClick={() => {
+              if (!confirmDelete) {
+                setConfirmDelete(true);
+                setTimeout(() => setConfirmDelete(false), 3000);
+                return;
+              }
+              deleteForm();
+            }}
+            title={confirmDelete ? "Click again to confirm delete" : "Delete form"}
+            className={`flex items-center gap-1.5 rounded-full border px-4 py-1.5 font-body text-xs font-semibold transition ${
+              confirmDelete
+                ? "border-warn bg-warn text-white hover:opacity-90"
+                : "border-line bg-white text-stone-600 hover:border-warn hover:bg-rose-50 hover:text-warn"
+            }`}
+          >
+            <Trash2 size={13} /> {confirmDelete ? "Confirm delete?" : "Delete"}
+          </button>
           <button
             onClick={togglePublish}
             className="rounded-full bg-[var(--accent)] px-4 py-1.5 font-body text-xs font-semibold text-white transition hover:opacity-90"
