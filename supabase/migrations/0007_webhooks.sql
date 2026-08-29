@@ -35,6 +35,7 @@ create index if not exists webhook_deliveries_dedup_idx on webhook_deliveries(we
 -- ---------------------------------------------------------------------------
 alter table webhook_deliveries enable row level security;
 
+drop policy if exists "owners read own webhook deliveries" on webhook_deliveries;
 create policy "owners read own webhook deliveries"
   on webhook_deliveries for select
   using (

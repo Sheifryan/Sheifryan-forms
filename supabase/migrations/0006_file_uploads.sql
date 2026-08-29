@@ -77,6 +77,7 @@ create trigger form_files_sync_storage
 alter table form_files enable row level security;
 
 -- Owners can read file metadata for their own forms.
+drop policy if exists "owners read own form files" on form_files;
 create policy "owners read own form files"
   on form_files for select
   using (
@@ -90,6 +91,7 @@ create policy "owners read own form files"
 -- Anyone can insert metadata for files attached to a published form
 -- (anonymous pre-submit uploads). The upload API route already validates the
 -- form is published and enforces the field's limits before this insert runs.
+drop policy if exists "anyone can insert form files" on form_files;
 create policy "anyone can insert form files"
   on form_files for insert
   with check (
