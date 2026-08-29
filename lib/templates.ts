@@ -1,6 +1,6 @@
 import { nanoid } from "nanoid";
 import type { FormField, FieldType } from "@/lib/schema";
-import { FIELD_LABELS } from "@/lib/schema";
+import { defaultFileConfig, FIELD_LABELS } from "@/lib/schema";
 
 type FieldOpts = {
   /** Mark the field as required in the pre-built form. */
@@ -27,6 +27,7 @@ function field(type: FieldType, label: string, opts: FieldOpts = {}): FormField 
     options: needsOptions
       ? (opts.options ?? ["Option 1", "Option 2"]).map((o) => ({ id: nanoid(6), label: o }))
       : undefined,
+    fileConfig: type === "file" ? defaultFileConfig() : undefined,
   };
 }
 

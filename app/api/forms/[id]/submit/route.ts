@@ -105,17 +105,41 @@ async function handleSubmit(request: Request, id: string) {
   // already independently confirmed the form is published and the payload
   // is validated against its schema above.
   const service = createServiceClient();
-  const { error: insertError } = await service.from("responses").insert({
-    form_id: form.id,
-    schema_version: form.schema_version,
-    answers: result.data,
-    meta: {
-      userAgent: request.headers.get("user-agent") ?? "",
-    },
-  });
+  const { data: inserted, error: insertError } = await service
+    .from("responses")
+    .insert({
+      form_id: form.id,
+      schema_version: form.schema_version,
+      answers: result.data,
+      meta: {
+        userAgent: request.headers.get("user-agent") ?? "",
+      },
+    })
+    .select("id")
+    .single();
 
-  if (insertError) {
-    return NextResponse.json({ error: insertError.message }, { status: 500 });
+  if (insertError || !inserted) {
+    return NextResponse.json({ error: insertError?.message ?? "Couldn't record the response" }, { status: 500 });
+  }
+
+  // Link every file referenced by this submission to its response. Files whose
+  // refs were uploaded but never submitted stay orphaned (response_id null).
+  const fileIds: string[] = [];
+  for (const field of (form.schema as FormSchema).fields) {
+    if (field.type !== "file") continue;
+    const refs = result.data[field.id];
+    if (Array.isArray(refs)) {
+      for (const ref of refs) if (ref && typeof ref.id === "string") fileIds.push(ref.id);
+    }
+  }
+  if (fileIds.length > 0) {
+    const { error: linkError } = await service
+      .from("form_files")
+      .update({ response_id: inserted.id })
+      .eq("form_id", form.id)
+      .in("id", fileIds)
+      .is("response_id", null);
+    if (linkError) console.error(`[submit] Couldn't link files to response ${inserted.id}:`, linkError.message);
   }
 
   return NextResponse.json({

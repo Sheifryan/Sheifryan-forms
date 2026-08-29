@@ -100,7 +100,10 @@ export function AnalyticsClient({
               ) : (
                 fields.map((f) => {
                   const answered = responses.filter(
-                    (r) => r.answers[f.id] !== undefined && r.answers[f.id] !== ""
+                    (r) => {
+                      const v = r.answers[f.id];
+                      return v !== undefined && v !== "" && !(Array.isArray(v) && v.length === 0);
+                    }
                   ).length;
                   const pct = total ? Math.round((answered / total) * 100) : 0;
                   return (

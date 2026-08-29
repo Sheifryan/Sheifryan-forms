@@ -76,6 +76,7 @@ export interface FormField {
   required: boolean;
   options?: FieldOption[]; // single_select / multi_select
   showIf?: ConditionRule[]; // ALL rules must pass (AND) to show this field
+  fileConfig?: FileFieldConfig; // file upload field limits
 }
 
 export interface FormSchema {
@@ -105,6 +106,59 @@ export const defaultSettings: FormSettings = {
   closeDate: "",
   passwordProtected: false,
 };
+
+// ---- File upload field configuration --------------------------------------
+// Lives on the field itself (FormField.fileConfig) so each upload field can
+// have its own allowed types / per-file size / count limits.
+
+export interface FileFieldConfig {
+  /** Allowed MIME types and/or extensions ("image/*", ".pdf"); empty = any. */
+  accept: string[];
+  /** Per-file maximum size in megabytes. */
+  maxSizeMb: number;
+  /** Maximum number of files a respondent can attach to this field. */
+  maxFiles: number;
+}
+
+export const defaultFileConfig = (): FileFieldConfig => ({
+  accept: [],
+  maxSizeMb: 10,
+  maxFiles: 1,
+});
+
+/** A reference to an uploaded file, stored as the field's answer value. */
+export interface UploadedFileRef {
+  id: string;
+  name: string;
+  mimeType: string;
+  sizeBytes: number;
+}
+
+// Case-insensitive accept-rule matcher shared by the renderer (client-side
+// checks) and the upload API (the authoritative check). Supports wildcard
+// mime types ("image/*") and extension rules (".pdf"). A missing/empty accept
+// list means "any file".
+export function fileMatchesAccept(accept: string[] | undefined, mimeType: string, fileName: string): boolean {
+  const rules = (accept ?? []).filter((a) => a && a.trim().length > 0);
+  if (rules.length === 0) return true;
+  const ext = "." + (fileName.split(".").pop() ?? "").toLowerCase();
+  const lowerMime = mimeType.toLowerCase();
+  return rules.some((rule) => {
+    const r = rule.trim().toLowerCase();
+    if (r === "*" || r === "*/*") return true;
+    if (r.endsWith("/*")) return lowerMime.startsWith(r.slice(0, -1));
+    if (r.startsWith(".")) return ext === r;
+    return lowerMime === r;
+  });
+}
+
+export function formatBytes(bytes: number): string {
+  if (!Number.isFinite(bytes) || bytes <= 0) return "0 B";
+  const units = ["B", "KB", "MB", "GB", "TB"];
+  const i = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
+  const val = bytes / Math.pow(1024, i);
+  return `${val.toFixed(i === 0 || val >= 10 ? 0 : 1)} ${units[i]}`;
+}
 
 // Accent theme presets. Applied via a CSS custom property (--accent) rather
 // than pre-baked Tailwind class strings, so any component can opt in with
@@ -171,11 +225,24 @@ export function zodSchemaForField(field: FormField): z.ZodTypeAny {
     case "time":
       schema = z.string().regex(/^\d{2}:\d{2}$/, "Enter a valid time");
       break;
+    case "file": {
+      const cfg = field.fileConfig ?? defaultFileConfig();
+      schema = z
+        .array(
+          z.object({
+            id: z.string(),
+            name: z.string(),
+            mimeType: z.string(),
+            sizeBytes: z.number(),
+          })
+        )
+        .max(cfg.maxFiles, `You can attach at most ${cfg.maxFiles} file${cfg.maxFiles === 1 ? "" : "s"}.`);
+      break;
+    }
     case "single_select":
     case "dropdown":
     case "short_text":
     case "long_text":
-    case "file":
     default:
       schema = z.string();
       break;

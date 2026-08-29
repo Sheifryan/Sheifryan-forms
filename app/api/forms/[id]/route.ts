@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { createClient, createServiceClient } from "@/lib/supabase/server";
 import { hashFormPassword } from "@/lib/password";
 import type { FormSchema, FormSettings } from "@/lib/schema";
 
@@ -78,6 +78,20 @@ export async function DELETE(_: Request, { params }: { params: { id: string } })
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  // Remove the actual S3 objects before dropping the form — the DB rows
+  // cascade away with the form, but the storage bucket won't clean itself.
+  const service = createServiceClient();
+  const { data: files } = await service
+    .from("form_files")
+    .select("storage_path")
+    .eq("form_id", params.id);
+  const paths = ((files ?? []) as { storage_path: string }[]).map((f) => f.storage_path);
+  if (paths.length > 0) {
+    await service.storage.from("form-attachments").remove(paths).catch((e: unknown) => {
+      console.error(`[forms] Couldn't remove storage objects for form ${params.id}:`, e);
+    });
+  }
 
   const { error } = await supabase.from("forms").delete().eq("id", params.id).eq("owner_id", user.id);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });

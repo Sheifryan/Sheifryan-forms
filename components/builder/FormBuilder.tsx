@@ -48,6 +48,7 @@ import {
   Copy,
   Download,
   X,
+  HardDrive,
 } from "lucide-react";
 import QRCode from "qrcode";
 import {
@@ -55,6 +56,8 @@ import {
   FIELD_GROUPS,
   THEMES,
   DEFAULT_THEME,
+  defaultFileConfig,
+  formatBytes,
   type FormField,
   type FormSchema,
   type FieldType,
@@ -72,6 +75,8 @@ interface Props {
   initialStatus: "draft" | "published" | "closed";
   initialSettings: FormSettings;
   initialTheme: ThemeKey;
+  storageBytes?: number;
+  fileCount?: number;
 }
 
 const TYPE_ICONS: Record<FieldType, typeof Type> = {
@@ -106,6 +111,15 @@ function blankField(type: FieldType): FormField {
   if (type === "page_break") {
     return { id: nanoid(8), type, label: "New page", required: false };
   }
+  if (type === "file") {
+    return {
+      id: nanoid(8),
+      type,
+      label: FIELD_LABELS[type],
+      required: false,
+      fileConfig: defaultFileConfig(),
+    };
+  }
   return {
     id: nanoid(8),
     type,
@@ -127,6 +141,8 @@ export function FormBuilder({
   initialStatus,
   initialSettings,
   initialTheme,
+  storageBytes = 0,
+  fileCount = 0,
 }: Props) {
   const [title, setTitle] = useState(initialTitle);
   const [fields, setFields] = useState<FormField[]>(initialSchema.fields);
@@ -448,6 +464,8 @@ export function FormBuilder({
             if (res.ok) toast.success("Password saved");
             else toast.error("Couldn't save the password");
           }}
+          storageBytes={storageBytes}
+          fileCount={fileCount}
         />
       )}
 
@@ -824,10 +842,14 @@ function SettingsTab({
   settings,
   onChange,
   onSavePassword,
+  storageBytes,
+  fileCount,
 }: {
   settings: FormSettings;
   onChange: (patch: Partial<FormSettings>) => void;
   onSavePassword: (password: string) => Promise<void>;
+  storageBytes: number;
+  fileCount: number;
 }) {
   const inputCls =
     "w-full rounded-md border border-line bg-white px-3 py-2 font-body text-xs text-ink outline-none focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)]";
@@ -846,6 +868,25 @@ function SettingsTab({
   return (
     <div className="flex-1 overflow-y-auto bg-paper p-8">
       <div className="mx-auto max-w-xl space-y-5">
+        <div className="rounded-xl border border-line bg-white p-5">
+          <h3 className="mb-3 font-display text-[13px] font-semibold text-ink">Storage</h3>
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-paper text-muted">
+              <HardDrive size={16} />
+            </div>
+            <div>
+              <p className="font-body text-sm font-semibold text-ink">{formatBytes(storageBytes)} used</p>
+              <p className="font-body text-xs text-muted">
+                {fileCount} file{fileCount === 1 ? "" : "s"} uploaded to your Supabase S3 storage bucket
+              </p>
+            </div>
+          </div>
+          <p className="mt-3 font-body text-[10.5px] leading-relaxed text-muted">
+            Files attached to this form are stored privately in the <b>form-attachments</b> bucket. Usage updates
+            automatically as respondents upload files and as responses are removed.
+          </p>
+        </div>
+
         <div className="rounded-xl border border-line bg-white p-5">
           <h3 className="mb-3 font-display text-[13px] font-semibold text-ink">After submission</h3>
           <div className="mb-4">

@@ -1,9 +1,10 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Search, Download, MoreVertical, Inbox, ArrowLeft } from "lucide-react";
-import type { FormField, FormSchema } from "@/lib/schema";
+import { Search, Download, MoreVertical, Inbox, ArrowLeft, Paperclip } from "lucide-react";
+import type { FormField, FormSchema, UploadedFileRef } from "@/lib/schema";
+import { formatBytes } from "@/lib/schema";
 
 interface FormRow {
   id: string;
@@ -27,6 +28,11 @@ function answerDisplay(field: FormField, value: unknown): string {
   }
   if (field.type === "checkbox") return value ? "Yes" : "No";
   if (field.type === "rating") return "★".repeat(Number(value)) + "☆".repeat(5 - Number(value));
+  if (field.type === "file") {
+    const arr = Array.isArray(value) ? (value as UploadedFileRef[]) : [];
+    if (arr.length === 0) return "—";
+    return arr.map((r) => r.name || String(r)).join(", ");
+  }
   return String(value);
 }
 
@@ -52,10 +58,51 @@ export function SubmissionsClient({
   const router = useRouter();
   const [query, setQuery] = useState("");
   const [openId, setOpenId] = useState<string | null>(null);
+  const [signedUrls, setSignedUrls] = useState<Record<string, string>>({});
 
   const activeForm = forms.find((f) => f.id === activeFormId) || null;
-  const fields = activeForm?.schema?.fields ?? [];
+  const fields = useMemo(() => activeForm?.schema?.fields ?? [], [activeForm]);
   const openResponse = responses.find((r) => r.id === openId) || null;
+
+  // Fetch short-lived signed download URLs for every file in the response that
+  // is currently open. The bucket is private, so this is the only way to read
+  // the objects, and the route is owner-only.
+  useEffect(() => {
+    if (!openResponse || !activeFormId) {
+      setSignedUrls({});
+      return;
+    }
+    const ids: string[] = [];
+    for (const f of fields) {
+      if (f.type !== "file") continue;
+      const v = openResponse.answers[f.id];
+      if (Array.isArray(v)) {
+        for (const ref of v as UploadedFileRef[]) if (typeof ref?.id === "string") ids.push(ref.id);
+      }
+    }
+    if (ids.length === 0) {
+      setSignedUrls({});
+      return;
+    }
+    let cancelled = false;
+    setSignedUrls({});
+    fetch(`/api/forms/${activeFormId}/files/signed`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ids }),
+    })
+      .then((res) => res.json().catch(() => ({})))
+      .then((data: { files?: { id: string; url: string }[] }) => {
+        if (cancelled) return;
+        const map: Record<string, string> = {};
+        for (const file of data.files ?? []) map[file.id] = file.url;
+        setSignedUrls(map);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [openResponse, activeFormId, fields]);
 
   const filtered = useMemo(() => {
     if (!query) return responses;
@@ -137,7 +184,11 @@ export function SubmissionsClient({
                   <div key={f.id} className="flex items-start justify-between gap-6 py-3">
                     <span className="w-40 shrink-0 font-body text-xs text-muted">{f.label}</span>
                     <span className="flex-1 text-right font-body text-sm text-ink">
-                      {answerDisplay(f, openResponse.answers[f.id])}
+                      {f.type === "file" ? (
+                        <FileAnswerDisplay value={openResponse.answers[f.id]} urls={signedUrls} />
+                      ) : (
+                        answerDisplay(f, openResponse.answers[f.id])
+                      )}
                     </span>
                   </div>
                 ))}
@@ -197,6 +248,33 @@ function EmptyState({ text }: { text: string }) {
     <div className="rounded-xl border border-dashed border-line bg-white p-10 text-center">
       <Inbox className="mx-auto mb-2 text-stone-300" size={22} />
       <p className="font-body text-xs text-muted">{text}</p>
+    </div>
+  );
+}
+
+function FileAnswerDisplay({ value, urls }: { value: unknown; urls: Record<string, string> }) {
+  const refs = Array.isArray(value) ? (value as UploadedFileRef[]) : [];
+  if (refs.length === 0) return <>—</>;
+  const missing = refs.filter((r) => !urls[r.id]).length;
+  return (
+    <div className="flex flex-col items-end gap-1.5">
+      {refs.map((r) => (
+        <a
+          key={r.id}
+          href={urls[r.id]}
+          target="_blank"
+          rel="noreferrer"
+          onClick={(e) => !urls[r.id] && e.preventDefault()}
+          className="flex max-w-full items-center gap-1.5 rounded-md border border-line bg-paper px-2.5 py-1.5 font-body text-xs text-ink transition hover:border-muted"
+        >
+          <Paperclip size={12} className="shrink-0 text-muted" />
+          <span className="min-w-0 truncate">{r.name}</span>
+          <span className="shrink-0 text-[10.5px] text-muted">{formatBytes(r.sizeBytes)}</span>
+        </a>
+      ))}
+      {missing > 0 && (
+        <p className="font-body text-[10px] text-muted">Some links are still loading — refresh to re-generate them.</p>
+      )}
     </div>
   );
 }

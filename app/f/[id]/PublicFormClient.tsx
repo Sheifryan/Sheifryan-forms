@@ -36,5 +36,7 @@ export function PublicFormClient({
     return { ok: false, fieldErrors: data.fieldErrors ?? {}, error: data.error as string | undefined };
   }
 
-  return <FormRenderer schema={schema} onSubmit={handleSubmit} settings={settings} />;
+  return (
+    <FormRenderer schema={schema} onSubmit={handleSubmit} settings={settings} uploadUrl={`/api/forms/${formId}/upload`} />
+  );
 }

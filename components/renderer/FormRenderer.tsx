@@ -1,9 +1,10 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { Star, ArrowLeft, ArrowRight } from "lucide-react";
-import type { FormField, FormSchema, FormSettings } from "@/lib/schema";
-import { isFieldVisible, splitIntoPages } from "@/lib/schema";
+import { useMemo, useRef, useState } from "react";
+import { nanoid } from "nanoid";
+import { Star, ArrowLeft, ArrowRight, Paperclip, X, Loader2 } from "lucide-react";
+import type { FormField, FormSchema, FormSettings, UploadedFileRef } from "@/lib/schema";
+import { isFieldVisible, splitIntoPages, defaultFileConfig, fileMatchesAccept, formatBytes } from "@/lib/schema";
 
 interface SubmitResult {
   ok: boolean;
@@ -17,9 +18,11 @@ interface Props {
   onSubmit: (answers: Record<string, unknown>) => Promise<SubmitResult>;
   submitLabel?: string;
   settings?: FormSettings;
+  /** Endpoint the file upload field posts to. Omitted in preview mode. */
+  uploadUrl?: string;
 }
 
-export function FormRenderer({ schema, onSubmit, submitLabel = "Submit", settings }: Props) {
+export function FormRenderer({ schema, onSubmit, submitLabel = "Submit", settings, uploadUrl }: Props) {
   const pages = useMemo(() => splitIntoPages(schema.fields), [schema.fields]);
   const [pageIndex, setPageIndex] = useState(0);
   const [answers, setAnswers] = useState<Record<string, unknown>>({});
@@ -48,7 +51,9 @@ export function FormRenderer({ schema, onSubmit, submitLabel = "Submit", setting
     const next: Record<string, string> = {};
     fields.forEach((f) => {
       if (f.type === "page_break" || !isFieldVisible(f, answers)) return;
-      if (f.required && (answers[f.id] === undefined || answers[f.id] === "")) next[f.id] = "This field is required";
+      const v = answers[f.id];
+      const empty = v === undefined || v === null || v === "" || (Array.isArray(v) && v.length === 0);
+      if (f.required && empty) next[f.id] = "This field is required";
       if (f.type === "email" && answers[f.id] && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(answers[f.id])))
         next[f.id] = "Enter a valid email address";
     });
@@ -121,6 +126,7 @@ export function FormRenderer({ schema, onSubmit, submitLabel = "Submit", setting
             value={answers[field.id]}
             error={errors[field.id]}
             onChange={(v) => setValue(field.id, v)}
+            uploadUrl={uploadUrl}
           />
         ) : null
       )}
@@ -162,11 +168,13 @@ function FieldInput({
   value,
   error,
   onChange,
+  uploadUrl,
 }: {
   field: FormField;
   value: unknown;
   error?: string;
   onChange: (v: unknown) => void;
+  uploadUrl?: string;
 }) {
   const baseInput =
     "w-full rounded border border-line bg-white px-3 py-2 font-body text-sm text-ink outline-none focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)]";
@@ -318,13 +326,161 @@ function FieldInput({
         </div>
       )}
       {field.type === "file" && (
-        <input
-          type="file"
-          className="font-body text-sm text-muted"
-          onChange={(e) => onChange(e.target.files?.[0]?.name ?? "")}
-        />
+        <FileUploadInput field={field} value={value} error={error} onChange={onChange} uploadUrl={uploadUrl} />
       )}
 
+      {error && field.type !== "file" && <p className="mt-1 font-body text-xs text-warn">{error}</p>}
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------- File upload */
+
+function FileUploadInput({
+  field,
+  value,
+  error,
+  onChange,
+  uploadUrl,
+}: {
+  field: FormField;
+  value: unknown;
+  error?: string;
+  onChange: (v: unknown) => void;
+  uploadUrl?: string;
+}) {
+  const cfg = field.fileConfig ?? defaultFileConfig();
+  const refs = Array.isArray(value) ? (value as UploadedFileRef[]) : [];
+  const inputRef = useRef<HTMLInputElement | null>(null);
+  const sessionRef = useRef(nanoid(12));
+  const [uploading, setUploading] = useState<string[]>([]);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+
+  const maxReached = cfg.maxFiles > 0 && refs.length >= cfg.maxFiles;
+
+  async function handleFiles(selected: FileList | null) {
+    if (!selected || selected.length === 0) return;
+    setUploadError(null);
+
+    const remaining = Math.max(0, cfg.maxFiles - refs.length);
+    if (remaining === 0 || cfg.maxFiles === 0) {
+      setUploadError(`You can attach at most ${cfg.maxFiles} file${cfg.maxFiles === 1 ? "" : "s"}.`);
+      if (inputRef.current) inputRef.current.value = "";
+      return;
+    }
+
+    const toUpload = Array.from(selected).slice(0, remaining);
+    const maxBytes = cfg.maxSizeMb * 1024 * 1024;
+
+    // Client-side pre-checks (the server re-validates everything anyway).
+    for (const f of toUpload) {
+      if (!fileMatchesAccept(cfg.accept, f.type, f.name)) {
+        setUploadError(`${f.name} isn't an allowed file type on this form.`);
+        if (inputRef.current) inputRef.current.value = "";
+        return;
+      }
+      if (f.size > maxBytes) {
+        setUploadError(`${f.name} is larger than the ${cfg.maxSizeMb} MB limit.`);
+        if (inputRef.current) inputRef.current.value = "";
+        return;
+      }
+    }
+
+    // Preview mode (no upload endpoint wired up) — remember the selection
+    // locally so the preview and client-side validation behave like live.
+    if (!uploadUrl) {
+      const local = toUpload.map((f) => ({
+        id: `local-${nanoid(8)}`,
+        name: f.name,
+        mimeType: f.type || "application/octet-stream",
+        sizeBytes: f.size,
+      }));
+      onChange([...refs, ...local]);
+      if (inputRef.current) inputRef.current.value = "";
+      return;
+    }
+
+    setUploading((prev) => [...prev, ...toUpload.map((f) => f.name)]);
+    const added: UploadedFileRef[] = [];
+    for (const f of toUpload) {
+      const fd = new FormData();
+      fd.append("file", f);
+      fd.append("fieldId", field.id);
+      fd.append("session", sessionRef.current);
+      try {
+        const res = await fetch(uploadUrl, { method: "POST", body: fd });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          setUploadError(data.error ?? `Couldn't upload ${f.name}.`);
+          break;
+        }
+        added.push(data as UploadedFileRef);
+      } catch {
+        setUploadError(`Couldn't upload ${f.name}. Check your connection and try again.`);
+        break;
+      }
+    }
+    setUploading([]);
+    if (added.length > 0) onChange([...refs, ...added]);
+    if (inputRef.current) inputRef.current.value = "";
+  }
+
+  function removeRef(ref: UploadedFileRef) {
+    onChange(refs.filter((r) => r.id !== ref.id));
+    if (!uploadUrl || ref.id.startsWith("local-")) return;
+    // Best-effort cleanup of the still-pending stored object.
+    fetch(uploadUrl, {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: ref.id, session: sessionRef.current }),
+    }).catch(() => {});
+  }
+
+  return (
+    <div>
+      <input
+        ref={inputRef}
+        type="file"
+        multiple={cfg.maxFiles !== 1}
+        accept={cfg.accept.filter(Boolean).join(",") || undefined}
+        disabled={maxReached}
+        onChange={(e) => handleFiles(e.target.files)}
+        className="font-body text-sm text-muted file:mr-3 file:rounded file:border-0 file:bg-[var(--accent)] file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-white file:cursor-pointer"
+      />
+
+      {uploading.length > 0 && (
+        <p className="mt-2 flex items-center gap-1.5 font-body text-xs text-muted">
+          <Loader2 size={12} className="animate-spin" /> Uploading {uploading.join(", ")}…
+        </p>
+      )}
+
+      {refs.length > 0 && (
+        <div className="mt-2 space-y-1.5">
+          {refs.map((r) => (
+            <div key={r.id} className="flex items-center gap-2 rounded-md border border-line bg-paper px-2.5 py-1.5">
+              <Paperclip size={12} className="shrink-0 text-muted" />
+              <span className="min-w-0 flex-1 truncate font-body text-xs text-ink">{r.name}</span>
+              <span className="shrink-0 font-body text-[10.5px] text-muted">{formatBytes(r.sizeBytes)}</span>
+              <button
+                type="button"
+                onClick={() => removeRef(r)}
+                className="shrink-0 rounded p-0.5 text-muted hover:bg-white hover:text-warn"
+                aria-label={`Remove ${r.name}`}
+              >
+                <X size={13} />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {maxReached && (
+        <p className="mt-1.5 font-body text-[10.5px] text-muted">
+          You&rsquo;ve attached {refs.length} of {cfg.maxFiles} allowed file{cfg.maxFiles === 1 ? "" : "s"}.
+        </p>
+      )}
+
+      {uploadError && <p className="mt-1 font-body text-xs text-warn">{uploadError}</p>}
       {error && <p className="mt-1 font-body text-xs text-warn">{error}</p>}
     </div>
   );

@@ -1,7 +1,7 @@
 "use client";
 
 import { nanoid } from "nanoid";
-import type { FormField, ConditionRule } from "@/lib/schema";
+import { defaultFileConfig, type FormField, type ConditionRule } from "@/lib/schema";
 
 interface Props {
   field: FormField;
@@ -127,6 +127,8 @@ export function FieldEditor({ field, allFields, onChange }: Props) {
         </div>
       )}
 
+      {field.type === "file" && <FileConfigEditor field={field} onChange={onChange} />}
+
       <div>
         <div className="mb-1.5 flex items-center justify-between">
           <label className={labelCls + " mb-0"}>Show this field if</label>
@@ -177,6 +179,113 @@ export function FieldEditor({ field, allFields, onChange }: Props) {
           ))}
         </div>
       </div>
+    </div>
+  );
+}
+
+/* --------------------------------------------------------------- File config */
+
+const ACCEPT_PRESETS: { label: string; values: string[] }[] = [
+  { label: "Images", values: ["image/*"] },
+  {
+    label: "Documents",
+    values: [
+      "application/pdf",
+      "text/plain",
+      "application/msword",
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    ],
+  },
+  {
+    label: "Spreadsheets",
+    values: [
+      "text/csv",
+      "application/vnd.ms-excel",
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    ],
+  },
+  { label: "Any file", values: [] },
+];
+
+function FileConfigEditor({ field, onChange }: { field: FormField; onChange: (patch: Partial<FormField>) => void }) {
+  const cfg = field.fileConfig ?? defaultFileConfig();
+
+  function setAccept(values: string[]) {
+    onChange({ fileConfig: { ...cfg, accept: values } });
+  }
+
+  return (
+    <div className="rounded-lg border border-line bg-paper p-3">
+      <p className="mb-2 font-mono text-[10.5px] font-bold uppercase tracking-wide text-muted">File upload settings</p>
+
+      <div className="mb-3">
+        <label className={labelCls}>Allowed file types</label>
+        <input
+          className={inputCls}
+          value={cfg.accept.filter((a) => a.trim()).join(", ")}
+          placeholder="e.g. image/*, .pdf, .docx — empty means any"
+          onChange={(e) =>
+            setAccept(
+              e.target.value
+                .split(",")
+                .map((s) => s.trim())
+                .filter(Boolean)
+            )
+          }
+        />
+        <div className="mt-1.5 flex flex-wrap gap-1">
+          {ACCEPT_PRESETS.map((p) => (
+            <button
+              key={p.label}
+              type="button"
+              onClick={() => setAccept(p.values)}
+              className={`rounded-full border px-2 py-0.5 font-body text-[10px] font-semibold transition ${
+                JSON.stringify(cfg.accept) === JSON.stringify(p.values)
+                  ? "border-[var(--accent)] bg-white text-[var(--accent)]"
+                  : "border-line bg-white text-muted hover:border-muted"
+              }`}
+            >
+              {p.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="mb-3 grid grid-cols-2 gap-3">
+        <div>
+          <label className={labelCls}>Max size (MB)</label>
+          <input
+            type="number"
+            min={1}
+            max={512}
+            className={inputCls}
+            value={cfg.maxSizeMb}
+            onChange={(e) => {
+              const v = Number(e.target.value);
+              onChange({ fileConfig: { ...cfg, maxSizeMb: Number.isFinite(v) && v > 0 ? v : 1 } });
+            }}
+          />
+        </div>
+        <div>
+          <label className={labelCls}>Max files</label>
+          <input
+            type="number"
+            min={1}
+            max={20}
+            className={inputCls}
+            value={cfg.maxFiles}
+            onChange={(e) => {
+              const v = Number(e.target.value);
+              onChange({ fileConfig: { ...cfg, maxFiles: Number.isFinite(v) && v > 0 ? v : 1 } });
+            }}
+          />
+        </div>
+      </div>
+
+      <p className="font-body text-[10.5px] leading-relaxed text-muted">
+        Files are uploaded straight to your Supabase Storage (S3) bucket when the respondent picks them, and each
+        file&rsquo;s metadata (name, type, size) is saved as part of the response.
+      </p>
     </div>
   );
 }
