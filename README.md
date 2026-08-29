@@ -84,6 +84,67 @@ via **Terminal → Run Task**.
    Without this step, the "Notify by email" field in a form's Settings tab
    is saved but has no effect — the app still works fine without it.
 
+7. **Webhooks & deadline auto-close** — apply `supabase/migrations/0007_webhooks.sql`
+   and set `CRON_SECRET` in `.env.local`. On Vercel, `vercel.json` registers an
+   hourly cron (`/api/cron/webhooks`) that flips due forms to `closed` and fires
+   their "on deadline" webhooks. You can trigger it manually at any time:
+   ```bash
+   curl -H "Authorization: Bearer $CRON_SECRET" https://your-deploy.vercel.app/api/cron/webhooks
+   ```
+
+## Webhooks & integrations
+
+Forms can register webhooks under **Builder → Integrations**. Each webhook
+POSTs a JSON payload to your endpoint, and you choose which events trigger it:
+
+- **On submit (per record)** — fires once for every response as it's recorded.
+- **On deadline** — fires once, after the form's close date passes and the form
+  is auto-closed (hourly scheduler; retried until it succeeds).
+
+Every request is a `POST` with a JSON body. Headers:
+
+- `Content-Type: application/json`
+- `X-FormCraft-Event` — `submission`, `deadline`, or `test`
+- `X-FormCraft-Webhook-Id` — the webhook that fired
+- `X-FormCraft-Signature` — `sha256=<hex>` HMAC of the **exact raw body** (only
+  sent if you configured a signing secret)
+
+### Example payload (submission)
+
+```json
+{
+  "event": "submission",
+  "form": { "id": "...", "title": "Event registration", "schemaVersion": 3 },
+  "response": {
+    "id": "...",
+    "createdAt": "2025-08-29T10:00:00.000Z",
+    "answers": { "fieldId1": "Ada Lovelace", "fieldId2": "ada@example.com" }
+  },
+  "fields": [
+    { "id": "fieldId1", "label": "Full name", "value": "Ada Lovelace" },
+    { "id": "fieldId2", "label": "Email", "value": "ada@example.com" }
+  ]
+}
+```
+
+### Verifying the signature (Node.js)
+
+```js
+import { createHmac, timingSafeEqual } from "crypto";
+
+const signature = req.headers["x-formcraft-signature"].replace("sha256=", "");
+const expected = createHmac("sha256", process.env.FORMCRAFT_WEBHOOK_SECRET)
+  .update(rawBody) // the exact raw body string, not re-stringified
+  .digest("hex");
+if (!timingSafeEqual(Buffer.from(expected), Buffer.from(signature))) {
+  return res.status(401).end();
+}
+```
+
+Delivery attempts are logged in the `webhook_deliveries` table and viewable in
+the Integrations tab (status code, latency, error). Add a webhook, hit **Test**,
+and check **Recent deliveries** to confirm everything works end-to-end.
+
 ## How it's structured
 
 - `components/AppShell.tsx` — the sidebar shell (Home / Submissions /
@@ -160,8 +221,9 @@ via **Terminal → Run Task**.
 - **Rate limiting** in the submit route is in-memory (`Map`) — fine for one
   dev server, useless across multiple deployed instances. Swap in Upstash
   Redis or similar.
-- **File uploads** are stubbed (just capture the filename). Wire them to
-  Supabase Storage with signed upload URLs before relying on this field type.
+- **File uploads** store to a private Supabase Storage bucket
+  (`form-attachments`) with per-file metadata and per-form storage tracking;
+  downloads go through owner-only signed URLs (see the file-upload migrations).
 - **Password hashing** is a single unsalted SHA-256 pass (see
   `lib/password.ts`) — fine as a "keep casual visitors out" gate, not
   intended as a vault. Swap in bcrypt/argon2 (via an Edge Function, since

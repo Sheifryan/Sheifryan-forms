@@ -2,6 +2,11 @@ import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { createClient, createServiceClient } from "@/lib/supabase/server";
 import { validateSubmission, type FormSchema, type FormSettings } from "@/lib/schema";
+import {
+  buildSubmissionPayload,
+  deliverWebhook,
+  webhooksForEvent,
+} from "@/lib/webhooks";
 
 // Extremely simple in-memory rate limit for demo purposes. Swap for
 // Upstash Redis (or similar) before shipping — this resets on every deploy
@@ -49,7 +54,7 @@ async function handleSubmit(request: Request, id: string) {
   const supabase = createClient();
   const { data: form, error: formError } = await supabase
     .from("forms")
-    .select("id, schema, schema_version, status, settings")
+    .select("id, title, schema, schema_version, status, settings")
     .eq("id", id)
     .single();
 
@@ -140,6 +145,34 @@ async function handleSubmit(request: Request, id: string) {
       .in("id", fileIds)
       .is("response_id", null);
     if (linkError) console.error(`[submit] Couldn't link files to response ${inserted.id}:`, linkError.message);
+  }
+
+  // Fire "submission" webhooks. Failed deliveries must never block (or break)
+  // the respondent's experience, so every webhook is awaited inside a
+  // settled-promise batch and any failures are only logged.
+  const submissionWebhooks = webhooksForEvent(form.settings as FormSettings, "submission");
+  if (submissionWebhooks.length > 0) {
+    const schema = form.schema as FormSchema;
+    const payload = buildSubmissionPayload(
+      { id: form.id, title: form.title, schema_version: form.schema_version },
+      schema,
+      {
+        responseId: inserted.id,
+        answers: result.data,
+        meta: { userAgent: request.headers.get("user-agent") ?? "" },
+        createdAt: new Date().toISOString(),
+      }
+    );
+    const results = await Promise.allSettled(
+      submissionWebhooks.map((webhook) =>
+        deliverWebhook(service, { formId: form.id, webhook, event: "submission", payload })
+      )
+    );
+    results.forEach((r, i) => {
+      if (r.status === "rejected") {
+        console.error(`[submit] Webhook ${submissionWebhooks[i].id} threw:`, r.reason);
+      }
+    });
   }
 
   return NextResponse.json({

@@ -93,6 +93,7 @@ export interface FormSettings {
   closeOnDate: boolean;
   closeDate?: string;
   passwordProtected: boolean;
+  webhooks?: WebhookConfig[]; // outgoing webhook integrations
 }
 
 export const defaultSettings: FormSettings = {
@@ -105,6 +106,52 @@ export const defaultSettings: FormSettings = {
   closeOnDate: false,
   closeDate: "",
   passwordProtected: false,
+  webhooks: [],
+};
+
+// ---- Webhooks --------------------------------------------------------------
+// Each form can register multiple webhooks. Configuration lives on the form's
+// settings JSONB (settings.webhooks[]) — the builder's autosave persists it.
+// A webhook fires on the events its owner chose: every new submission
+// ("submission") and/or once when the form's close date is reached
+// ("deadline"). Delivery attempts are logged in webhook_deliveries.
+
+export type WebhookEvent = "submission" | "deadline";
+
+export interface WebhookConfig {
+  id: string;
+  /** Human-friendly label, e.g. "Slack" — purely cosmetic. */
+  name?: string;
+  /** Endpoint that receives the POST. */
+  url: string;
+  /** Which events this webhook listens for. At least one required. */
+  events: WebhookEvent[];
+  /** Optional HMAC-SHA256 signing secret. */
+  secret?: string;
+  enabled: boolean;
+  createdAt: string;
+}
+
+export interface WebhookDelivery {
+  id: string;
+  webhookId: string;
+  event: WebhookEvent | "test";
+  url: string;
+  success: boolean;
+  statusCode: number | null;
+  durationMs: number | null;
+  error: string | null;
+  createdAt: string;
+}
+
+export const WEBHOOK_EVENT_LABELS: Record<WebhookEvent, string> = {
+  submission: "On submit (per record)",
+  deadline: "On deadline",
+};
+
+export const WEBHOOK_EVENT_SHORT: Record<WebhookEvent, string> = {
+  submission: "On submit",
+  deadline: "Deadline",
 };
 
 // ---- File upload field configuration --------------------------------------

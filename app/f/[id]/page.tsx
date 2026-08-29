@@ -28,6 +28,10 @@ export default async function PublicFormPage({ params }: { params: { id: string 
   const themeKey = (form.theme as ThemeKey) ?? DEFAULT_THEME;
   const accent = THEMES[themeKey]?.hex ?? THEMES[DEFAULT_THEME].hex;
 
+  // Never forward webhook configuration — especially signing secrets — to the
+  // public client. The renderer/submit only need the display-level settings.
+  const publicSettings: FormSettings = { ...settings, webhooks: undefined };
+
   // Password gate: compare the visitor's cookie (if any) against the real
   // hash, which only the service client is allowed to read.
   if (settings?.passwordProtected) {
@@ -77,7 +81,7 @@ export default async function PublicFormPage({ params }: { params: { id: string 
             <PublicFormClient
               formId={form.id}
               schema={(form.schema as FormSchema) ?? { fields: [] }}
-              settings={settings}
+              settings={publicSettings}
             />
           )}
         </div>

@@ -49,6 +49,7 @@ import {
   Download,
   X,
   HardDrive,
+  Plug,
 } from "lucide-react";
 import QRCode from "qrcode";
 import {
@@ -63,8 +64,10 @@ import {
   type FieldType,
   type FormSettings,
   type ThemeKey,
+  type WebhookDelivery,
 } from "@/lib/schema";
 import { FieldEditor } from "./FieldEditor";
+import { IntegrationsTab } from "./IntegrationsTab";
 import { FormRenderer } from "@/components/renderer/FormRenderer";
 import { useToast } from "@/components/Toast";
 
@@ -77,6 +80,7 @@ interface Props {
   initialTheme: ThemeKey;
   storageBytes?: number;
   fileCount?: number;
+  deliveries?: WebhookDelivery[];
 }
 
 const TYPE_ICONS: Record<FieldType, typeof Type> = {
@@ -101,6 +105,7 @@ const TABS = [
   { id: "fields", label: "Fields", icon: FileText },
   { id: "rules", label: "Rules", icon: Zap },
   { id: "settings", label: "Settings", icon: SettingsIcon },
+  { id: "integrations", label: "Integrations", icon: Plug },
   { id: "themes", label: "Themes", icon: Palette },
   { id: "share", label: "Share", icon: Share2 },
 ] as const;
@@ -143,6 +148,7 @@ export function FormBuilder({
   initialTheme,
   storageBytes = 0,
   fileCount = 0,
+  deliveries = [],
 }: Props) {
   const [title, setTitle] = useState(initialTitle);
   const [fields, setFields] = useState<FormField[]>(initialSchema.fields);
@@ -471,6 +477,15 @@ export function FormBuilder({
 
       {tab === "themes" && (
         <ThemesTab title={title} fields={fields} theme={theme} onThemeChange={setTheme} settings={settings} />
+      )}
+
+      {tab === "integrations" && (
+        <IntegrationsTab
+          formId={formId}
+          settings={settings}
+          onChange={(patch) => setSettings((prev) => ({ ...prev, ...patch }))}
+          deliveries={deliveries}
+        />
       )}
 
       {tab === "share" && <ShareTab formId={formId} title={title} />}
