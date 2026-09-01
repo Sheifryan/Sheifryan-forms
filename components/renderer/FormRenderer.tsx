@@ -2,9 +2,9 @@
 
 import { useMemo, useRef, useState } from "react";
 import { nanoid } from "nanoid";
-import { Star, ArrowLeft, ArrowRight, Paperclip, X, Loader2 } from "lucide-react";
-import type { FormField, FormSchema, FormSettings, UploadedFileRef } from "@/lib/schema";
-import { isFieldVisible, splitIntoPages, defaultFileConfig, fileMatchesAccept, formatBytes } from "@/lib/schema";
+import { Star, ArrowLeft, ArrowRight, Paperclip, X, Loader2, Banknote } from "lucide-react";
+import type { FormField, FormSchema, FormSettings, UploadedFileRef, PaymentCurrency } from "@/lib/schema";
+import { isFieldVisible, splitIntoPages, defaultFileConfig, fileMatchesAccept, formatBytes, computePaymentCharge, defaultPaymentConfig } from "@/lib/schema";
 
 interface SubmitResult {
   ok: boolean;
@@ -325,11 +325,103 @@ function FieldInput({
           })}
         </div>
       )}
+      {field.type === "payment" && (
+        <PaymentInput field={field} value={value} onChange={onChange} />
+      )}
       {field.type === "file" && (
         <FileUploadInput field={field} value={value} error={error} onChange={onChange} uploadUrl={uploadUrl} />
       )}
 
       {error && field.type !== "file" && <p className="mt-1 font-body text-xs text-warn">{error}</p>}
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------- Payment */
+
+function PaymentInput({
+  field,
+  value,
+  onChange,
+}: {
+  field: FormField;
+  value: unknown;
+  onChange: (v: unknown) => void;
+}) {
+  const cfg = field.paymentConfig ?? defaultPaymentConfig();
+  const draft = (typeof value === "object" && value !== null ? value : {}) as {
+    amount?: number | string;
+    currency?: PaymentCurrency;
+    phoneNumber?: string;
+  };
+  const currency: PaymentCurrency = draft.currency ?? cfg.currency ?? "UGX";
+  const rawAmount =
+    typeof draft.amount === "number" ? draft.amount : Number(draft.amount ?? 0);
+  const amount = Number.isFinite(rawAmount) ? rawAmount : 0;
+  const charge = computePaymentCharge(amount, currency, cfg.usdToUgxRate, cfg.taxRate);
+  const set = (patch: Partial<typeof draft>) => onChange({ ...draft, ...patch });
+  const fmt = (n: number) => n.toLocaleString("en-UG");
+
+  return (
+    <div className="space-y-2">
+      <p className="font-body text-[11px] text-muted">Mobile money payment (MarzPay.</p>
+
+      {cfg.amountMode === "fixed" ? (
+        <div className="flex items-center gap-2 rounded-md border border-line bg-paper px-3 py-2">
+          <Banknote size={14} className="text-muted" />
+          <span className="font-body text-sm text-ink">
+            {cfg.currency} {fmt(cfg.fixedAmount)}
+          </span>
+          <span className="ml-auto font-body text-[11px] text-muted">Fixed amount</span>
+        </div>
+      ) : (
+        <input
+          type="number"
+          min={cfg.minAmount ?? 1}
+          max={cfg.maxAmount}
+          step="any"
+          className="w-full rounded border border-line bg-white px-3 py-2 font-body text-sm text-ink outline-none focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)]"
+          placeholder={`Amount in ${currency}`}
+          value={typeof draft.amount === "number" ? draft.amount : (draft.amount ?? "")}
+          onChange={(e) => set({ amount: e.target.value })}
+        />
+      )}
+
+      <div className="flex items-center gap-2">
+        {cfg.currency === "UGX" ? (
+          <select
+            className="rounded border border-line bg-white px-2.5 py-1.5 font-body text-xs text-ink outline-none focus:border-[var(--accent)]"
+            value={currency}
+            onChange={(e) => set({ currency: e.target.value as PaymentCurrency })}
+          >
+            <option value="UGX">UGX</option>
+            <option value="USD">USD</option>
+          </select>
+        ) : (
+          <span className="rounded border border-line bg-paper px-2.5 py-1.5 font-body text-xs text-stone-600">USD</span>
+        )}
+        <span className="font-body text-[11px] text-muted">
+          {currency === "USD" ? `≈ UGX ${fmt(charge.totalUgx)} incl. tax` : `Total: UGX ${fmt(charge.totalUgx)} incl. tax`}
+        </span>
+      </div>
+
+      {cfg.phoneFieldId ? (
+        <p className="font-body text-[11px] text-muted">
+          We&rsquo;ll use the phone number you entered on this form&rsquo;s phone field for the payment.
+        </p>
+      ) : (
+        <input
+          type="tel"
+          className="w-full rounded border border-line bg-white px-3 py-2 font-body text-sm text-ink outline-none focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)]"
+          placeholder="Mobile money number (e.g. +2567…)"
+          value={draft.phoneNumber ?? ""}
+          onChange={(e) => set({ phoneNumber: e.target.value })}
+        />
+      )}
+
+      <p className="font-body text-[10.5px] text-muted">
+        On submit, you&rsquo;ll get a mobile money prompt on your phone to approve the payment.
+      </p>
     </div>
   );
 }

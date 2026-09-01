@@ -1,12 +1,24 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
+import { randomUUID } from "crypto";
 import { createClient, createServiceClient } from "@/lib/supabase/server";
-import { validateSubmission, type FormSchema, type FormSettings } from "@/lib/schema";
+import {
+  validateSubmission,
+  computePaymentCharge,
+  defaultPaymentConfig,
+  type FormField,
+  type FormSchema,
+  type FormSettings,
+  type PaymentAnswer,
+  type PaymentCurrency,
+  type PaymentFieldConfig,
+} from "@/lib/schema";
 import {
   buildSubmissionPayload,
   deliverWebhook,
   webhooksForEvent,
 } from "@/lib/webhooks";
+import { buildPaymentAnswer, initiateCollection, marzpayConfigured } from "@/lib/marzpay";
 
 // Extremely simple in-memory rate limit for demo purposes. Swap for
 // Upstash Redis (or similar) before shipping — this resets on every deploy
@@ -106,6 +118,15 @@ async function handleSubmit(request: Request, id: string) {
     return NextResponse.json({ error: "Validation failed", fieldErrors: result.errors }, { status: 422 });
   }
 
+  const schema = form.schema as FormSchema;
+  const paymentsForResponse = await chargePayments(schema, result.data, form.id, form.title);
+  if (!paymentsForResponse.ok) {
+    return NextResponse.json(
+      { error: "Payment failed", fieldErrors: paymentsForResponse.fieldErrors },
+      { status: paymentsForResponse.statusCode }
+    );
+  }
+
   // Service client bypasses RLS for the insert — safe here because we've
   // already independently confirmed the form is published and the payload
   // is validated against its schema above.
@@ -126,6 +147,9 @@ async function handleSubmit(request: Request, id: string) {
   if (insertError || !inserted) {
     return NextResponse.json({ error: insertError?.message ?? "Couldn't record the response" }, { status: 500 });
   }
+
+  // Insert the payments rows we just initiated, scoped to the new response.
+  await insertPaymentRows(service, form.id, inserted.id, paymentsForResponse.payments);
 
   // Link every file referenced by this submission to its response. Files whose
   // refs were uploaded but never submitted stay orphaned (response_id null).
@@ -179,5 +203,171 @@ async function handleSubmit(request: Request, id: string) {
     ok: true,
     confirmationMessage: settings?.confirmationMessage,
     redirectUrl: settings?.redirectUrl || undefined,
+    payments: paymentsForResponse.payments.map((p) => ({
+      fieldId: p.fieldId,
+      reference: p.answer.reference,
+      transactionId: p.answer.transactionId,
+    })),
   });
+}
+
+// ---------------------------------------------------------------------------
+// MarzPay payment initiation
+// ---------------------------------------------------------------------------
+
+interface ChargedPayment {
+  fieldId: string;
+  answer: PaymentAnswer;
+  raw: { transaction: { uuid: string } };
+}
+
+type PaymentResult =
+  | { ok: true; payments: ChargedPayment[] }
+  | { ok: false; statusCode: number; fieldErrors: Record<string, string> };
+
+/**
+ * For every visible payment field, compute the UGX charge and initiate a
+ * mobile-money collection with MarzPay. If any payment can't be initiated
+ * (invalid phone, provider error, unconfigured MarzPay, ...) the whole
+ * submission fails BEFORE any response row is written, so respondents never
+ * get a "success" without payment.
+ */
+async function chargePayments(
+  schema: FormSchema,
+  answers: Record<string, unknown>,
+  formId: string,
+  formTitle: string
+): Promise<PaymentResult> {
+  const service = createServiceClient();
+  const paymentFields = schema.fields.filter((f) => f.type === "payment");
+  if (paymentFields.length === 0) return { ok: true, payments: [] };
+
+  if (!marzpayConfigured()) {
+    const fieldErrors: Record<string, string> = {};
+    for (const f of paymentFields) {
+      fieldErrors[f.id] = "Payments aren't configured on this form yet. Please try again later.";
+    }
+    return { ok: false, statusCode: 503, fieldErrors };
+  }
+
+  const callbackUrl = process.env.MARZPAY_CALLBACK_URL;
+  const payments: ChargedPayment[] = [];
+  const fieldErrors: Record<string, string> = {};
+
+  for (const field of paymentFields) {
+    const cfg: PaymentFieldConfig = field.paymentConfig ?? defaultPaymentConfig();
+    const draft = (answers[field.id] ?? {}) as {
+      amount?: number | string;
+      currency?: PaymentCurrency;
+      phoneNumber?: string;
+    };
+
+    // Resolve amount.
+    const amount =
+      cfg.amountMode === "fixed" ? cfg.fixedAmount : typeof draft.amount === "number" ? draft.amount : Number(draft.amount);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      fieldErrors[field.id] = "Enter a valid payment amount";
+      continue;
+    }
+    if (cfg.minAmount && amount < cfg.minAmount) {
+      fieldErrors[field.id] = `Minimum amount is ${cfg.minAmount}.`;
+      continue;
+    }
+    if (cfg.maxAmount && amount > cfg.maxAmount) {
+      fieldErrors[field.id] = `Maximum amount is ${cfg.maxAmount}.`;
+      continue;
+    }
+
+    // Resolve phone number: inline draft or a linked phone field's answer.
+    let phone = (draft.phoneNumber ?? "").trim();
+    if (!phone && cfg.phoneFieldId) {
+      phone = String(answers[cfg.phoneFieldId] ?? "").trim();
+    }
+    if (!phone) {
+      fieldErrors[field.id] = "A mobile money number is required for payment.";
+      continue;
+    }
+    if (!/^\+?\d{9,15}$/.test(phone.replace(/[\s-]/g, ""))) {
+      fieldErrors[field.id] = "Enter a valid mobile money number (e.g. +2567…).";
+      continue;
+    }
+
+    const currency: PaymentCurrency = draft.currency === "USD" || cfg.currency === "USD" ? "USD" : "UGX";
+    if (cfg.currency === "USD" && !cfg.usdToUgxRate) {
+      fieldErrors[field.id] = "This form's USD rate isn't configured.";
+      continue;
+    }
+
+    const charge = computePaymentCharge(amount, currency, cfg.usdToUgxRate, cfg.taxRate);
+    const reference = randomUUID();
+
+    try {
+      const initiated = await initiateCollection({
+        amountUgx: charge.totalUgx,
+        phoneNumber: phone,
+        reference,
+        description: cfg.description || `Payment for ${formTitle}`,
+        callbackUrl,
+        metadata: [{ formId }, { fieldId: field.id }],
+      });
+      if (!initiated?.transaction?.uuid) {
+        throw new Error("MarzPay didn't return a transaction uuid");
+      }
+      const answer = buildPaymentAnswer({
+        reference,
+        transactionId: initiated.transaction.uuid,
+        currency,
+        amount,
+        usdToUgxRate: currency === "USD" ? cfg.usdToUgxRate : null,
+        taxRate: cfg.taxRate,
+        method: cfg.method,
+        phoneNumber: phone,
+        description: cfg.description || undefined,
+      });
+      // Store the enriched PaymentAnswer as the field's answer.
+      answers[field.id] = answer;
+      payments.push({ fieldId: field.id, answer, raw: initiated });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Payment could not be initiated";
+      fieldErrors[field.id] = `Payment failed: ${message}`;
+    }
+  }
+
+  if (Object.keys(fieldErrors).length > 0) {
+    return { ok: false, statusCode: 422, fieldErrors };
+  }
+  return { ok: true, payments };
+}
+
+async function insertPaymentRows(
+  service: ReturnType<typeof createServiceClient>,
+  formId: string,
+  responseId: string,
+  payments: ChargedPayment[]
+) {
+  if (payments.length === 0) return;
+  const rows = payments.map((p) => ({
+    form_id: formId,
+    response_id: responseId,
+    field_id: p.fieldId,
+    reference: p.answer.reference,
+    status: p.answer.status,
+    transaction_id: p.answer.transactionId,
+    currency: p.answer.currency,
+    amount: p.answer.amount,
+    amount_ugx: p.answer.amountUgx,
+    usd_to_ugx_rate: p.answer.usdToUgxRate,
+    tax_rate: p.answer.taxRate,
+    tax_ugx: p.answer.taxUgx,
+    total_ugx: p.answer.totalUgx,
+    method: p.answer.method,
+    phone_number: p.answer.phoneNumber,
+    description: p.answer.description,
+    country: p.answer.country,
+    raw: p.raw,
+  }));
+  const { error } = await service.from("payments").insert(rows);
+  if (error) {
+    console.error(`[submit] Couldn't insert payment rows:`, error.message);
+  }
 }

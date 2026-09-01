@@ -20,6 +20,7 @@ export const FIELD_TYPES = [
   "time",
   "checkbox",
   "file",
+  "payment",
   "page_break",
 ] as const;
 
@@ -44,6 +45,7 @@ export const FIELD_LABELS: Record<FieldType, string> = {
   time: "Time",
   checkbox: "Checkbox",
   file: "File upload",
+  payment: "Payment",
   page_break: "Page Break",
 };
 
@@ -53,6 +55,7 @@ export const FIELD_GROUPS: { label: string; types: FieldType[] }[] = [
   { label: "Choice", types: ["single_select", "multi_select", "dropdown", "rating"] },
   { label: "Date & media", types: ["date", "time", "file"] },
   { label: "Other", types: ["checkbox"] },
+  { label: "Payments", types: ["payment"] },
   { label: "Layout", types: ["page_break"] },
 ];
 
@@ -77,6 +80,7 @@ export interface FormField {
   options?: FieldOption[]; // single_select / multi_select
   showIf?: ConditionRule[]; // ALL rules must pass (AND) to show this field
   fileConfig?: FileFieldConfig; // file upload field limits
+  paymentConfig?: PaymentFieldConfig; // payment field settings
 }
 
 export interface FormSchema {
@@ -172,6 +176,81 @@ export const defaultFileConfig = (): FileFieldConfig => ({
   maxSizeMb: 10,
   maxFiles: 1,
 });
+
+// ---- Payment field configuration ------------------------------------------
+// MarzPay mobile-money collections (UGX). USD amounts are converted to UGX
+// using a fixed per-field rate before charging (per product decision — MarzPay
+// has no USD mobile-money collection).
+
+export type PaymentCurrency = "UGX" | "USD";
+export type PaymentStatus = "pending" | "processing" | "completed" | "failed" | "cancelled";
+
+export interface PaymentFieldConfig {
+  /** Fixed amount by default; respondents enter their own amount otherwise. */
+  amountMode: "fixed" | "user_entered";
+  fixedAmount: number;
+  currency: PaymentCurrency;
+  /** Fixed USD → UGX conversion rate (used only when currency === "USD"). */
+  usdToUgxRate: number;
+  method: "mobile_money";
+  description?: string;
+  /** Tax as a percentage added on top of the converted amount. */
+  taxRate: number;
+  minAmount?: number;
+  maxAmount?: number;
+  /** If set, the mobile-money number is taken from this phone field's answer. */
+  phoneFieldId?: string;
+}
+
+export const defaultPaymentConfig = (): PaymentFieldConfig => ({
+  amountMode: "fixed",
+  fixedAmount: 10000,
+  currency: "UGX",
+  usdToUgxRate: 3600,
+  method: "mobile_money",
+  description: "",
+  taxRate: 0,
+  minAmount: undefined,
+  maxAmount: undefined,
+  phoneFieldId: undefined,
+});
+
+/** Snapshot stored in responses.answers[fieldId] for a payment field. */
+export interface PaymentAnswer {
+  provider: string; // "marzpay"
+  status: PaymentStatus;
+  reference: string; // MarzPay collection reference (uuid v4)
+  transactionId?: string | null; // MarzPay transaction uuid
+  providerTransactionId?: string | null; // telco/MarzPay provider tx id (from callback)
+  currency: PaymentCurrency;
+  amount: number; // entered/fixed amount in the chosen currency
+  amountUgx: number; // converted base amount in UGX
+  usdToUgxRate: number | null;
+  taxRate: number; // %
+  taxUgx: number;
+  totalUgx: number; // amountUgx + tax — the actual mobile-money charge
+  method: string; // "mobile_money"
+  phoneNumber: string;
+  description?: string;
+  country: string; // "UG"
+  error?: string | null;
+  createdAt: string;
+  updatedAt?: string | null;
+}
+
+/** Compute the UGX charge for a payment amount (conversion + tax). */
+export function computePaymentCharge(
+  amount: number,
+  currency: PaymentCurrency,
+  usdToUgxRate: number,
+  taxRate: number
+): { amountUgx: number; taxUgx: number; totalUgx: number } {
+  const safe = (n: number) => (Number.isFinite(n) && n > 0 ? n : 0);
+  const rate = currency === "USD" ? safe(usdToUgxRate) : 1;
+  const amountUgx = Math.round(safe(amount) * rate);
+  const taxUgx = Math.round(amountUgx * (safe(taxRate) / 100));
+  return { amountUgx, taxUgx, totalUgx: amountUgx + taxUgx };
+}
 
 /** A reference to an uploaded file, stored as the field's answer value. */
 export interface UploadedFileRef {
@@ -284,6 +363,24 @@ export function zodSchemaForField(field: FormField): z.ZodTypeAny {
           })
         )
         .max(cfg.maxFiles, `You can attach at most ${cfg.maxFiles} file${cfg.maxFiles === 1 ? "" : "s"}.`);
+      break;
+    }
+    case "payment": {
+      // The renderer submits a draft; the server enriches it into a PaymentAnswer.
+      schema = z
+        .object({
+          // amount is number|string to tolerate the input's raw string form.
+          amount: z.union([z.number(), z.string()]),
+          currency: z.enum(["UGX", "USD"]),
+          phoneNumber: z.string().optional(),
+        })
+        .refine(
+          (v) => {
+            const n = typeof v.amount === "number" ? v.amount : Number(v.amount);
+            return Number.isFinite(n) && Number(n) > 0;
+          },
+          { message: "Enter a valid payment amount", path: ["amount"] }
+        );
       break;
     }
     case "single_select":

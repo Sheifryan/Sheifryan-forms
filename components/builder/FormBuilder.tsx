@@ -47,6 +47,7 @@ import {
   QrCode,
   Copy,
   Download,
+  Banknote,
   X,
   HardDrive,
   Plug,
@@ -57,6 +58,7 @@ import {
   FIELD_GROUPS,
   THEMES,
   DEFAULT_THEME,
+  defaultPaymentConfig,
   defaultFileConfig,
   formatBytes,
   type FormField,
@@ -97,6 +99,7 @@ const TYPE_ICONS: Record<FieldType, typeof Type> = {
   date: Calendar,
   time: Clock,
   checkbox: CheckSquare,
+  payment: Banknote,
   file: Upload,
   page_break: SeparatorHorizontal,
 };
@@ -115,6 +118,15 @@ function blankField(type: FieldType): FormField {
   const needsOptions = type === "single_select" || type === "multi_select" || type === "dropdown";
   if (type === "page_break") {
     return { id: nanoid(8), type, label: "New page", required: false };
+  }
+  if (type === "payment") {
+    return {
+      id: nanoid(8),
+      type,
+      label: FIELD_LABELS[type],
+      required: false,
+      paymentConfig: defaultPaymentConfig(),
+    };
   }
   if (type === "file") {
     return {

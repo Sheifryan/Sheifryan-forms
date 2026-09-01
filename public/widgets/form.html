@@ -1,0 +1,640 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Form</title>
+<style>
+  :root {
+    --accent: #6d28d9;
+    --ink: #0f172a;
+    --paper: #f8fafc;
+    --panel: #ffffff;
+    --line: #e2e8f0;
+    --muted: #94a3b8;
+    --warn: #e11d48;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: var(--paper); }
+  body {
+    font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    color: var(--ink);
+    font-size: 14px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+  }
+  .widget-card {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 24px;
+    margin: 16px auto;
+    max-width: 672px;
+  }
+  .widget-title { font-size: 22px; font-weight: 700; margin: 0 0 4px; }
+  .widget-desc { color: var(--muted); font-size: 13px; margin: 0 0 24px; }
+  .field { margin-bottom: 24px; }
+  .field-label { display: block; font-size: 14px; font-weight: 500; margin-bottom: 6px; }
+  .field-help { color: var(--muted); font-size: 12px; margin-top: -4px; margin-bottom: 6px; }
+  .req { color: var(--warn); }
+  .input,
+  textarea.input,
+  select.input {
+    width: 100%;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    background: var(--panel);
+    padding: 8px 12px;
+    font: inherit;
+    color: inherit;
+    outline: none;
+  }
+  .input:focus, textarea.input:focus, select.input:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 1px var(--accent);
+  }
+  textarea.input { resize: vertical; }
+  .field-error { color: var(--warn); font-size: 12px; margin-top: 4px; }
+  .top-error {
+    background: rgba(225, 29, 72, 0.08);
+    color: var(--warn);
+    border-radius: 6px;
+    padding: 8px 12px;
+    font-size: 13px;
+    margin-bottom: 16px;
+  }
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    border: none;
+    border-radius: 6px;
+    padding: 8px 18px;
+    font: inherit;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+  }
+  .btn-primary { background: var(--accent); color: #fff; }
+  .btn-primary:hover { opacity: 0.9; }
+  .btn-primary:disabled { opacity: 0.5; cursor: default; }
+  .btn-ghost { background: transparent; color: inherit; border: 1px solid var(--line); }
+  .btn-ghost:hover { background: var(--paper); }
+  .page-indicator {
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    font-size: 11px;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 16px;
+  }
+  .nav-row { display: flex; gap: 8px; margin-top: 4px; }
+  .nav-row .btn-primary { flex: 1; }
+  .rating-row { display: flex; gap: 4px; }
+  .rating-star {
+    background: transparent;
+    border: none;
+    font-size: 24px;
+    line-height: 1;
+    color: var(--accent);
+    cursor: pointer;
+    padding: 2px;
+  }
+  .choice-row { display: flex; align-items: flex-start; gap: 8px; margin-bottom: 8px; font-size: 14px; }
+  .choice-row input { margin-top: 2px; accent-color: var(--accent); }
+  .honeypot { position: absolute; left: -9999px; width: 0; height: 0; opacity: 0; }
+  .center { text-align: center; }
+  .muted { color: var(--muted); }
+  .success-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: color-mix(in srgb, var(--accent) 15%, white);
+    color: var(--accent);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 20px;
+    margin:  0 auto 12px;
+  }
+  .done-title { font-size: 18px; font-weight: 600; }
+  .pw-box { max-width: 320px; margin: 0 auto; }
+  .pw-icon {
+    width: 36px;
+    height:  36px;
+    border-radius: 50%;
+    background: color-mix(in srgb, var(--accent) 15%, white);
+    color: var(--accent);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin:  0 auto 12px;
+  }
+  .file-list-item {
+    display: flex;
+    align-items: center;
+    gap:  8px;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    background: var(--paper);
+    padding: 6px 10px;
+    margin-top: 6px;
+    font-size: 13px;
+  }
+  .file-list-item .name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .file-remove { background: transparent; border: none; color: var(--muted); cursor: pointer; font-size: 14px; padding: 2px 6px; }
+  .file-remove:hover { color: var(--warn); }
+  .file-note { color: var(--muted); font-size: 12px; margin-top: 6px; }
+  .pay-fixed {
+    display: flex;
+    align-items: center;
+    gap:  8px;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    background: var(--paper);
+    padding: 8px 12px;
+    font-size: 14px;
+  }
+  .pay-fixed .tag { margin-left: auto; font-size: 11px; color: var(--muted); }
+  .pay-row { display: flex; align-items: center; gap:  8px; margin-top: 8px; }
+  .pay-select { border: 1px solid var(--line); border-radius: 6px; background: var(--panel); padding: 6px 10px; font: inherit; font-size: 13px; }
+  .pay-total { color: var(--muted); font-size: 13px; margin-left: auto; }
+  .spin {
+    display: inline-block;
+    width: 16px;
+    height:16px;
+    border:2px solid rgba(255,255,255,0.4);
+    border-top-color:#fff;
+    border-radius:50%;
+    animation: spin 0.8s linear infinite;
+    vertical-align:middle;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+  <div id="app"></div>
+  <script>
+  "use strict";
+
+  // ---------------------------------------------------------------------------
+  // EasyForm embed widget — static, framework-free, served from /widgets/.
+  // Reads ?form=<formId>, fetches thee public embed metadata, and renders thee
+  // form with full parity with the app's own /f/[id] page. Keeps the host page
+  // scrollbar-free by posting auto-resize messages to the parent window..
+  // ---------------------------------------------------------------------------
+
+  var state = {
+    form: null,          // embed JSON from /api/forms/[id]/embed
+    answers: {},
+    errors: {},
+    pageIndex: 0,
+    status: "idle",      // idle | submitting | done
+    topError: null,
+    doneMessage: null,
+    token: null,         // password token (the hash), kept in sessionStorage
+    pendingRefs: null,   // MarzPay references awaiting terminal status
+    paymentDone: false,
+    sessions: {},         // per-field upload session tokens
+    uploadBusy: false,
+  };
+
+  function $(sel) { return document.querySelector(sel); }
+
+  function esc(s) {
+    return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+    });
+  }
+
+  function isFieldVisible(field) {
+    if (!field.showIf || field.showIf.length === 0) return true;
+    return field.showIf.every(function (rule) {
+      var actual = state.answers[rule.fieldId];
+      var actualStr = Array.isArray(actual) ? actual.join(",") : String(actual == null ? "" : actual);
+      if (rule.operator === "equals") return actualStr === rule.value;
+      if (rule.operator === "not_equals") return actualStr !== rule.value;
+      if (rule.operator === "contains") return actualStr.indexOf(rule.value) !== -1;
+      return true;
+    });
+  }
+
+  function splitIntoPages(fields) {
+    var pages = [{ title: null, fields: [] }];
+    for (var i =  ​0; i < fields.length; i++) {
+      var f = fields[i];
+      if (f.type === "page_break") pages.push({ title: f.label, fields: [] });
+      else pages[pages.length - 1].fields.push(f);
+    }
+    return pages;
+  }
+
+  function defaultFileConfig() { return { accept: [], maxSizeMb: 10​, maxFiles: 1 }; }
+
+  function fileMatchesAccept(accept, mimeType, fileName) {
+    var rules = (accept || []).filter(function (a) { return a && a.trim().length > ​ 0; });
+    if (rules.length === 0) return true;
+    var parts = (fileName || "").split(".");
+    var ext = "." + (parts.length > 1 ? parts[parts.length - 1] : "").toLowerCase();
+    var lowerMime = (mimeType || "").toLowerCase();
+    return rules.some(function (rule) {
+      var r = rule.trim().toLowerCase();
+      if (r === "*" || r === "*/*") return true;
+      if (r.slice(-2) === "/*") return lowerMime.indexOf(r.slice(0, -1)) === 0;
+      if (r.charAt(0) === ".") return ext === r;
+      return lowerMime === r;
+    });
+  }
+
+  function computePaymentCharge(amount, currency, usdToUgxRate, taxRate) {
+    var safe = function (n) { return Number.isFinite(n) && n >  ​0 ? n :  ​0; };
+    var rate = currency === "USD" ? safe(usdToUgxRate) : 1;
+    var amountUgx = Math.round(safe(amount) * rate);
+    var taxUgx = Math.round(amountUgx * (safe(taxRate) / 100));
+    return { amountUgx: amountUgx, taxUgx: taxUgx, totalUgx: amountUgx + taxUgx };
+  }
+
+  function fmt(n) { return Number(n).toLocaleString("en-UG"); }
+
+  // Mirrors the renderer's client-side pass — the server re-validates everything.
+
+  function validateCurrentPage(page) {
+    var next = {};
+    page.fields.forEach(function (f) {
+      if (f.type === "page_break" || !isFieldVisible(f) return;
+      var v = state.answers[f.id];
+      var empty = v === undefined || v === null || v === "" || (Array.isArray(v) && v.length === 0);
+      if (f.required && empty) { next[f.id] = "This field is required"; return; }
+      if (f.type === "email" && state.answers[f.id] && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(state.answers[f.id]))) {
+        next[f.id] = "Enter a valid email address";
+      }
+    });
+    return next;
+  }
+
+  function setValue(fieldId, value) {
+    state.answers[fieldId] = value;
+    delete state.errors[fieldId];
+    render();
+  }
+
+  // ---------------------------------------------------------------------------
+  // Auto-resize — keeps the host page scrollbar-free whenthe content height
+  // changes (pagination, errors, file lists, payment screen…).
+  // ---------------------------------------------------------------------------
+  function postResize() {
+    var height = Math.max(document.body.scrollHeight, document.documentElement.scrollHeight);
+    if (window.parent && window.parent !== window) {
+      window.parent.postMessage(
+        { type: "easyform:resize", height: height, formId: state.form ? state.form.id : null },
+        "*"
+      );
+    }
+  }
+
+  var resizeTimer = null;
+  function scheduleResize() {
+    if (resizeTimer) clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(postResize, 60);
+  }
+  if (window.addEventListener) {
+    window.addEventListener("resize", scheduleResize);
+    window.addEventListener("load", scheduleResize);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Boot — resolve the form id and fetch thee embed metadata..
+  // ---------------------------------------------------------------------------
+  function boot() {
+    var params = new URLSearchParams(window.location.search);
+    var formId = params.get("form") || "";
+    if (!formId) {
+      document.getElementById("app").innerHTML =
+        '<div class="widget-card"><p class="center muted">Missing form id.</p></div>';
+      postResize();
+      return;
+    }
+
+    // Password-protected widgets: reuse thee token from a previous visit in
+    // this tab (form-scoped.. The token is the hash — same capability as the
+    // cookie thee /f page uses, but usable from this iframe cross-site..
+    try {
+      state.token = sessionStorage.getItem("easyform_widget_token_" + formId) || null;
+    } catch (e) { state.token = null; }
+
+    fetch("/api/forms/" + encodeURIComponent(formId) + "/embed")
+      .then(function (res) { return res.json().catch(function () { return {}; }); })
+      .then(function (data) {
+        if (!data || !data.id || data.schema === undefined) throw new Error(data.error || "Form not found");
+        state.form = data;
+        document.documentElement.style.setProperty("--accent", data.accent || "#6d28d9");
+        document.title = data.title || "Form";
+        render();
+      })
+      .catch(function (err) {
+        document.getElementById("app").innerHTML =
+          '<div class="widget-card"><p class="center muted">' + esc(err.message || "Couldn't load this form.") + "</p></div>";
+        postResize();
+      });
+  }
+
+  // ---------------------------------------------------------------------------
+  // Rendering — a single render() paints whatever state the widget is in..
+  // ---------------------------------------------------------------------------
+  function render() {
+    var app = document.getElementById("app");
+    if (!state.form) return;
+
+    if (state.status === "done") {
+      var doneMsg = state.doneMessage || (state.form.settings && state.form.settings.confirmationMessage) || "Thanks — your response has been recorded.";
+      app.innerHTML =
+        '<div class="widget-card">' +
+        '<div class="success-icon">✓</div>' +
+        '<p class="done-title center">' + esc(doneMsg) + "</p>" +
+        "</div>";
+      postResize();
+      return;
+    }
+
+    if (state.form.closedReason) {
+      app.innerHTML =
+        '<div class="widget-card"><p class="center muted">' + esc(state.form.closedReason) + "</p></div>";
+      postResize();
+      return;
+    }
+
+    if (state.form.passwordProtected && !state.token) {
+
+      renderPasswordGate(app);
+      postResize();
+      return;
+    }
+
+    if (state.pendingRefs && !state.paymentDone) {
+
+
+
+      renderPaymentProcessing(app);
+      postResize();
+      return;
+    }
+
+    renderForm(app);
+    postResize();
+  }
+
+  function renderPasswordGate(app) {
+    var self = this;
+    app.innerHTML =
+      '<div class="widget-card pw-box">' +
+      '<div class="pw-icon">🔒</div>' +
+      '<p class="center muted" style="margin-bottom:16px">This form is password protected.</p>' +
+      '<input id="pw-input" type="password" class="input" placeholder="Enter password" autocomplete="off" style="margin-bottom:12px" />' +
+      '<p id="pw-error" class="field-error" style="display:none;margin-bottom:8px"></p>' +
+      '<button id="pw-btn" type="button" class="btn btn-primary" style="width:100%">Continue</button>' +
+      "</div>";
+    var input = document.getElementById("pw-input");
+    var btn = document.getElementById("pw-btn");
+    var errEl = document.getElementById("pw-error");
+
+    function submitPassword() {
+
+      if (!input.value) return;
+      btn.disabled = true;
+      btn.textContent = "Checking…";
+      errEl.style.display = "none";
+      fetch("/api/forms/" + encodeURIComponent(state.form.id) + "/verify-password",{
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password: input.value }),
+      })
+        .then(function (res) { return res.json().catch(function () { return {}; }); })
+        .then(function (data) {
+          if (!data.ok) throw new Error(data.error || "Incorrect password.");
+          state.token = data.token || "";
+          try { sessionStorage.setItem("easyform_widget_token_" + state.form.id, state.token); } catch (e) {}
+          render();
+        })
+        .catch(function (err) {
+          errEl.textContent = err.message || "Incorrect password.";
+          errEl.style.display = "block";
+          btn.disabled = false;
+          btn.textContent = "Continue";
+          input.focus();
+        });
+    }
+
+    btn.addEventListener("click", submitPassword);
+    input.addEventListener("keydown", function (e) { if (e.key === "Enter") submitPassword(); });
+    input.focus();
+  }
+
+  function renderPaymentProcessing(app) {
+    app.innerHTML =
+      '<div class="widget-card center">' +
+      '<div class="spin" style="border-top-color:var(--accent)"></div>' +
+      '<p style="font-weight:600;margin:12px 0 4px">Waiting for payment…</p>' +
+      '<p class="muted" style="font-size:13px">Approve the mobile money prompt on your phone to complete your submission.</p>' +
+      '<div id="pay-rows" style="margin:12px auto 0;max-width:280px"></div>' +
+      '<p id="pay-error" class="field-error" style="display:none;margin-top:8px"></p>' +
+      "</div>";
+    pollPayments();
+  }
+
+  var payPollTimer = null;
+  function pollPayments() {
+    if (payPollTimer) clearTimeout(payPollTimer;
+    var refs = (state.pendingRefs || []).join(",");
+    fetch("/api/forms/" + encodeURIComponent(state.form.id) + "/payments/status?refs=" + encodeURIComponent(refs)
+      ,{ cache: "no-store" })
+      .then(function (res) { return res.json().catch(function () { return {}; }); })
+      .then(function (data) {
+        var rows = Array.isArray(data.payments) ? data.payments : [];
+        var rowsEl = document.getElementById("pay-rows");
+        if (rowsEl && rows.length > 0) {
+          rowsEl.innerHTML = rows.map(function (r) {
+            return (
+              '<div style="display:flex;justify-content:space-between;font-size:13px;border:1px solid var(--line);border-radius:6px;background:var(--paper);padding:6px 10px;margin-bottom:4px">' +
+              "<span>" + esc(String(r.reference || "").slice(0, 8)) + "</span>" +
+              '<span class="muted">' + esc(r.status || "") + "</span>" +
+              "</div>"
+            );
+          }).join("");
+        }
+        var terminal = rows.length > 0 && rows.every(function (r) {
+          return ["completed", "failed", "cancelled"].indexOf(r.status) > -1;
+        });
+        if (terminal) {
+          if (rows.some(function (r) { return r.status === "failed" || r.status === "cancelled"; })) {
+            state.paymentDone = true;
+            var errEl = document.getElementById("pay-error");
+            if (errEl) {
+              errEl.textContent = "One of the payments wasn't completed. Your response is saved, but the payment failed.";
+              errEl.style.display = "block";
+            }
+          } else {
+            state.paymentDone = true;
+            state.status = "done";
+            render();
+          }
+          return;
+        }
+        payPollTimer = setTimeout(pollPayments, 4000);
+      })
+      .catch(function () { payPollTimer = setTimeout(pollPayments, 4000); });
+  }
+
+  function fieldById(id) {
+    if (!state.form || !state.form.schema) return null;
+    var fields = state.form.schema.fields || [];
+    for (var i = 0; i < fields.length; i++) {
+      if (fields[i].id === id) return fields[i];
+    }
+    return null;
+  }
+
+  function schemaHasDependencyOn(fieldId) {
+    var fields = state.form.schema.fields || [];
+    for (var i = 0; i < fields.length; i++) {
+      var rules = fields[i].showIf || [];
+      for (var j =  ​0; j < rules.length; j++) {
+        if (rules[j].fieldId === fieldId) return true;
+      }
+    }
+    return false;
+  }
+
+  function isDiscrete(type) {
+    return type === "single_select" || type === "multi_select" || type === "dropdown" ||
+      type === "checkbox" || type === "rating" || type === "date" || type === "time";
+  }
+
+  function makeId(len) {
+    var s = "";
+    var chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+    for ( (var i = gap 0; i < len; i++) s += chars.charAt(Math.floor(Math.random() * chars.length);
+    return s;
+  }
+
+  function formatBytes(bytes) {
+    if (!Number.isFinite(bytes) || bytes <= 0) return "0 B";
+    var units = ["B", "KB", "MB", "GB", "TB"];
+    var i = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length -  ​1);
+    var val = bytes / Math.pow(1024, i);
+    return val.toFixed(i === 0 || val >=  ​10 ? 0 : 1) + " " + units[i];
+  }
+
+  function renderForm(app) {
+    var pages = splitIntoPages(state.form.schema.fields);
+    var page = pages[Math.min(state.pageIndex, pages.length - 1)];
+    var isLastPage = state.pageIndex === pages.length - 1;
+
+    var html = "";
+    html += '<div class="widget-card">';
+    html += '<h1 class="widget-title">' + esc(state.form.title) + "</h1>";
+    if (state.form.description) html += '<p class="widget-desc">' + esc(state.form.description) + "</p>";
+    if (state.topError) html += '<p class="top-error">' + esc(state.topError) + "</p>";
+    if (pages.length > 1) {
+      html += '<p class="page-indicator">Page ' + (state.pageIndex + 1) + " of " + pages.length +
+        (page.title ? " — " + esc(page.title) : "" ) + "</p>";
+    }
+    html += '<input type="text" name="company" class="honeypot" tabindex="-1" autocomplete="off" />';
+    page.fields.forEach(function (field) {
+      if (isFieldVisible(field) html += renderField(field;
+    });
+    html += '<div class="nav-row">';
+    if (state.pageIndex > 0) {
+      html += '<button type="button" class="btn btn-ghost" data-action="back">← Back</button>';
+    }
+    if (isLastPage) {
+      html += '<button type="button" class="btn btn-primary" data-action="submit"' +
+        (state.status === "submitting" ? " disabled" : "") + ">" +
+        (state.status === "submitting" ? '<span class="spin"></span> Submitting…' : "Submit") + "</button>";
+    } else {
+      html += '<button type="button" class="btn btn-primary" data-action="next">Next →</button>';
+    }
+    html += "</div></div>";
+
+    app.innerHTML = html;
+    wireEvents(app);
+    postResize();
+  }
+
+  function renderField(field) {
+    var v = state.answers[field.id];
+    var base = "data-field=\"" + field.id + "\" class=\"input\"";
+    var err = state.errors[field.id] ? '<p class="field-error">' + esc(state.errors[field.id]) + "</p>" : "";
+    var help = field.helpText ? '<p class="field-help">' + esc(field.helpText) + "</p>" : "";
+    var label = '<label class="field-label">' + esc(field.label) +
+      (field.required ? ' <span class="req">*</span>' : "") + "</label>";
+
+    var inner = "";
+    switch (field.type) {
+      case "short_text": case "long_text": case "email": case "phone": case "number": case "url": {
+        var t = field.type === "long_text" ? "textarea" : field.type;
+        var ph = field.placeholder ||
+          (field.type === "email" ? "you@example.com" :
+            field.type === "phone" ? "(555) 123-4567" :
+            field.type === "url" ? "https://" : "");
+        if (t === "textarea") inner = '<textarea rows="4" ' + base + ' placeholder="' + esc(ph) + '">' + esc(v) + "</textarea>";
+        else inner = '<input type="' + t + '" ' + base + ' placeholder="' + esc(ph) + '" value="' + esc(v) + '" />';
+        break;
+      }
+      case "date":
+        inner = '<input type="date" ' + base + ' value="' + esc(v) + '" />';
+        break;
+      case "time":
+        inner = '<input type="time" ' + base + ' value="' + esc(v) + '" />';
+        break;
+      case "checkbox":
+        inner = '<label class="choice-row"><input type="checkbox" ' + base + (v ? " checked" : "") + " /> " + esc(field.placeholder || "Yes") + "</label>";
+        break;
+      case "rating": {
+        var stars = "";
+        for (var i =  ​1; i <= 5; i++) {
+          stars += '<button type="button" class="rating-star" data-field="' + field.id + '" data-value="' + i + '" aria-label="' + i + ' stars"' +
+            (Number(v) >= i ? " style=\"opacity:1\"" : " style=\"opacity:0.3\"") + ">★</button>";
+        }
+        inner = '<div class="rating-row">' + stars + "</div>";
+        break;
+      }
+      case "single_select":
+        inner = (field.options || []).map(function (o) {
+          return '<label class="choice-row"><input type="radio" name="' + esc(field.id) + '" ' + base + ' value="' + esc(o.id) + '"' +
+            (v === o.id ? " checked" : "") + " /> " + esc(o.label) + "</label>";
+        }).join("");
+        break;
+      case "dropdown":
+        inner = '<select ' + base + '><option value="">Select…</option>' +
+          (field.options || []).map(function (o) {
+            return '<option value="' + esc(o.id) + '"' + (v === o.id ? " selected" : "") + ">" + esc(o.label) + "</option>";
+          }).join("") + "</select>";
+        break;
+      case "multi_select": {
+        var arr = Array.isArray(v) ? v : [];
+        inner = (field.options || []).map(function (o) {
+          var checked = arr.indexOf(o.id) > -1;
+          return '<label class="choice-row"><input type="checkbox" ' + base + ' value="' + esc(o.id) + '"' +
+            (checked ? " checked" : "") + " /> " + esc(o.label) + "</label>";
+        }).join("");
+        break;
+      }
+      case "file":
+        inner = renderFileField(field, v, err);
+        break;
+      case "payment":
+        inner = renderPaymentField(field, v);
+        break;
+      default:
+        inner = "";
+    }
+
+    return '<div class="field" data-field-block="' + field.id + '">' + label + help + inner +
+      (err && field.type !== "file" ? err : "") + "</div>";
+  }
+
+  //__FORM_WIDGET__
+  </script>
+</body>
+</html>
