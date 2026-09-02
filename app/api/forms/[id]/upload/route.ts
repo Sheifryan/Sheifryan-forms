@@ -39,18 +39,23 @@ async function handleUpload(request: Request, id: string) {
 
   const settings = form.settings as FormSettings;
 
-  // Password-protected forms: same cookie check as the submit route, so the
-  // upload endpoint can't be used to bypass the gate.
-  if (settings?.passwordProtected) {
-    const cookieValue = cookies().get(`easyform_pw_${id}`)?.value;
-    const service = createServiceClient();
-    const { data: hashRow } = await service.from("forms").select("password_hash").eq("id", id).single();
-    const verified = Boolean(hashRow?.password_hash) && cookieValue === hashRow.password_hash;
-    if (!verified) return NextResponse.json({ error: "This form requires a password." }, { status: 401 });
-  }
-
   const formData = await request.formData().catch(() => null);
   if (!formData) return NextResponse.json({ error: "Expected multipart form data" }, { status: 400 });
+
+  // Password-protected forms: same cookie check as the submit route, so the
+  // upload endpoint can't be used to bypass the gate. Embedded widgets forward
+  // the hash as an `accessToken` form part instead (SameSite blocks cookies in
+  // a third-party iframe).
+  if (settings?.passwordProtected) {
+    const cookieValue = cookies().get(`easyform_pw_${id}`)?.value;
+    const bodyToken = typeof formData.get("accessToken") === "string" ? (formData.get("accessToken") as string) : "";
+    formData.delete("accessToken");
+    const service = createServiceClient();
+    const { data: hashRow } = await service.from("forms").select("password_hash").eq("id", id).single();
+    const verified = Boolean(hashRow?.password_hash) &&
+      (cookieValue === hashRow.password_hash || bodyToken === hashRow.password_hash);
+    if (!verified) return NextResponse.json({ error: "This form requires a password." }, { status: 401 });
+  }
 
   const file = formData.get("file");
   const fieldId = formData.get("fieldId");

@@ -27,7 +27,7 @@ export async function POST(request: Request, { params }: { params: { id: string 
   if (!form.password_hash) {
     // Not actually password-protected server-side — treat as success so
     // the UI doesn't get stuck on a gate that shouldn't exist.
-    return NextResponse.json({ ok: true });
+    return NextResponse.json({ ok: true, token: "" });
   }
 
   const attemptHash = hashFormPassword(params.id, password);
@@ -35,10 +35,14 @@ export async function POST(request: Request, { params }: { params: { id: string 
     return NextResponse.json({ ok: false, error: "Incorrect password." }, { status: 403 });
   }
 
-  const response = NextResponse.json({ ok: true });
+  const response = NextResponse.json({ ok: true, token: attemptHash });
   // The cookie value is the hash itself (not the plaintext password), so a
   // page reload can re-verify by comparing it server-side against the DB
   // without storing any session state. Scoped to this form only.
+  //
+  // The JSON `token` (the same hash) is also returned so the embedded widget
+  // — which runs in an iframe on a third-party site where SameSite cookies
+  // can't be set — can forward it inline on submit/upload.
   response.cookies.set({
     name: `${COOKIE_PREFIX}${params.id}`,
     value: attemptHash,

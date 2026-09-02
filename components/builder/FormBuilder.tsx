@@ -51,6 +51,7 @@ import {
   X,
   HardDrive,
   Plug,
+  Code2,
 } from "lucide-react";
 import QRCode from "qrcode";
 import {
@@ -1126,8 +1127,11 @@ function ThemesTab({
 
 function ShareTab({ formId, title }: { formId: string; title: string }) {
   const [copied, setCopied] = useState(false);
+  const [embedCopied, setEmbedCopied] = useState<"iframe" | "script" | null>(null);
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
+  const [embedHeight, setEmbedHeight] = useState(640);
   const url = typeof window !== "undefined" ? `${window.location.origin}/f/${formId}` : `/f/${formId}`;
+  const origin = typeof window !== "undefined" ? window.location.origin : "";
   const toast = useToast();
 
   useEffect(() => {
@@ -1142,6 +1146,38 @@ function ShareTab({ formId, title }: { formId: string; title: string }) {
       toast.success("Link copied to clipboard");
       setTimeout(() => setCopied(false), 1500);
     });
+  }
+
+  function copyEmbed(kind: "iframe" | "script") {
+    navigator.clipboard.writeText(embedHtml(kind)).then(() => {
+      setEmbedCopied(kind);
+      toast.success(kind === "iframe" ? "Embed code copied" : "Widget script copied");
+      setTimeout(() => setEmbedCopied(null), 1500);
+    });
+  }
+
+  function embedHtml(kind: "iframe" | "script"): string {
+    const base = origin || "https://your-domain.com";
+    if (kind === "iframe") {
+      return `<!-- EasyForm embed — paste where the form should appear -->
+<iframe
+  src="${base}/widgets/form.html?form=${formId}"
+  width="100%"
+  height="${embedHeight}"
+  style="border:0;overflow:hidden"
+  frameborder="0"
+  loading="lazy"
+  title="${title.replace(/"/g, "")}"
+  allow="camera; microphone"
+></iframe>`;
+    }
+    return `<!-- EasyForm embed — paste where the form should appear -->
+<script
+  src="${base}/widgets/easyform.js"
+  data-form-id="${formId}"
+  data-height="${embedHeight}"
+  async
+></script>`;
   }
 
   function downloadQr() {
@@ -1188,6 +1224,72 @@ function ShareTab({ formId, title }: { formId: string; title: string }) {
           >
             <Download size={12} /> PNG
           </button>
+        </div>
+
+        {/* Embed widget */}
+        <div className="rounded-lg border border-line bg-white p-4">
+          <div className="mb-3 flex items-center gap-2">
+            <div className="flex h-8 w-8 items-center justify-center rounded-md bg-[var(--accent)] text-white">
+              <Code2 size={15} />
+            </div>
+            <div>
+              <p className="font-body text-xs font-semibold text-ink">Embed on your website</p>
+              <p className="font-body text-[11px] text-muted">
+                Paste this into your site&rsquo;s HTML. Works on any site, no plugins or frameworks needed.
+              </p>
+            </div>
+          </div>
+
+          <div className="mb-3 flex items-center gap-3">
+            <label htmlFor="embed-height" className="font-body text-[11px] font-medium text-stone-600">
+              Height
+            </label>
+            <input
+              id="embed-height"
+              type="number"
+              min={300}
+              max={2000}
+              step={20}
+              value={embedHeight}
+              onChange={(e) => setEmbedHeight(Math.max(300, Math.min(2000, Number(e.target.value) || 640)))}
+              className="w-24 rounded border border-line bg-white px-2 py-1.5 font-mono text-xs text-ink outline-none focus:border-[var(--accent)]"
+            />
+            <span className="font-body text-[11px] text-muted">
+              px &middot; the widget auto-resizes to fit its content.
+            </span>
+          </div>
+
+          <div className="space-y-3">
+            <div>
+              <p className="mb-1 font-body text-[11px] font-semibold text-stone-600">Script embed (recommended)</p>
+              <div className="rounded-md border border-line bg-paper p-2.5 font-mono text-[10.5px] leading-relaxed text-stone-600">
+                <pre className="whitespace-pre-wrap break-all">{embedHtml("script")}</pre>
+              </div>
+              <button
+                onClick={() => copyEmbed("script")}
+                className="mt-1.5 flex items-center gap-1.5 rounded-md border border-line bg-white px-2.5 py-1 font-body text-[11px] font-semibold text-ink hover:bg-paper"
+              >
+                <Copy size={11} /> {embedCopied === "script" ? "Copied" : "Copy script"}
+              </button>
+            </div>
+
+            <div>
+              <p className="mb-1 font-body text-[11px] font-semibold text-stone-600">Iframe embed</p>
+              <div className="rounded-md border border-line bg-paper p-2.5 font-mono text-[10.5px] leading-relaxed text-stone-600">
+                <pre className="whitespace-pre-wrap break-all">{embedHtml("iframe")}</pre>
+              </div>
+              <button
+                onClick={() => copyEmbed("iframe")}
+                className="mt-1.5 flex items-center gap-1.5 rounded-md border border-line bg-white px-2.5 py-1 font-body text-[11px] font-semibold text-ink hover:bg-paper"
+              >
+                <Copy size={11} /> {embedCopied === "iframe" ? "Copied" : "Copy iframe"}
+              </button>
+            </div>
+          </div>
+
+          <p className="mt-3 font-body text-[11px] text-muted">
+            Password protection, file uploads, payments and your chosen theme all work in the embedded widget automatically.
+          </p>
         </div>
 
         <p className="font-body text-xs text-muted">

@@ -81,12 +81,17 @@ async function handleSubmit(request: Request, id: string) {
 
   // Password-protected forms: require the same cookie the page-level gate
   // sets after a correct password, so this route can't be hit directly to
-  // bypass the gate shown on /f/[id].
+  // bypass the gate shown on /f/[id]. Embedded widgets can't rely on cookies
+  // (SameSite blocks third-party cookies in an iframe), so they forward the
+  // same hash value as a body `accessToken` instead — verifying it identically
+  // against the DB hash server-side.
   if (settings?.passwordProtected) {
     const cookieValue = cookies().get(`easyform_pw_${id}`)?.value;
+    const bodyToken = typeof body.accessToken === "string" ? body.accessToken : "";
     const service = createServiceClient();
     const { data: hashRow } = await service.from("forms").select("password_hash").eq("id", id).single();
-    const verified = Boolean(hashRow?.password_hash) && cookieValue === hashRow.password_hash;
+    const verified = Boolean(hashRow?.password_hash) &&
+      (cookieValue === hashRow.password_hash || bodyToken === hashRow.password_hash);
     if (!verified) {
       return NextResponse.json({ error: "This form requires a password." }, { status: 401 });
     }
