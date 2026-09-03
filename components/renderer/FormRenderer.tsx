@@ -66,8 +66,21 @@ export function FormRenderer({ schema, onSubmit, submitLabel = "Submit", setting
     setPageIndex((p) => p + 1);
   }
 
-  async function handleSubmit(e: React.FormEvent) {
+  function handleFormSubmit(e: React.FormEvent) {
+    // The browser fires submit on Enter from any unmasked text input because
+    // everything lives in one <form>. On every page except the last, that
+    // implicit submit must behave as "Next" — NOT submit the whole form.
     e.preventDefault();
+    if (!isLastPage) {
+      handleNext();
+      return;
+    }
+    void handleSubmit(e);
+  }
+
+  async function handleSubmit(e: React.FormEvent) {
+    // Only the final page reaches here: same validation as handleNext so
+    // the page's required fields are enforced before the whole form is sent.
     const clientErrors = validateClientSide(currentPage.fields);
     if (Object.keys(clientErrors).length > 0) {
       setErrors(clientErrors);
@@ -98,7 +111,7 @@ export function FormRenderer({ schema, onSubmit, submitLabel = "Submit", setting
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-6">
+    <form onSubmit={handleFormSubmit} className="space-y-6">
       {/* Honeypot — hidden from real users, catches naive bots */}
       <input
         type="text"

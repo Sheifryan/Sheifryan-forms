@@ -77,6 +77,7 @@ import { useToast } from "@/components/Toast";
 interface Props {
   formId: string;
   initialTitle: string;
+  initialDescription?: string;
   initialSchema: FormSchema;
   initialStatus: "draft" | "published" | "closed";
   initialSettings: FormSettings;
@@ -155,6 +156,7 @@ function blankField(type: FieldType): FormField {
 export function FormBuilder({
   formId,
   initialTitle,
+  initialDescription,
   initialSchema,
   initialStatus,
   initialSettings,
@@ -164,6 +166,7 @@ export function FormBuilder({
   deliveries = [],
 }: Props) {
   const [title, setTitle] = useState(initialTitle);
+  const [description, setDescription] = useState(initialDescription ?? "");
   const [fields, setFields] = useState<FormField[]>(initialSchema.fields);
   const [settings, setSettings] = useState<FormSettings>(initialSettings);
   const [theme, setTheme] = useState<ThemeKey>(initialTheme);
@@ -199,7 +202,7 @@ export function FormBuilder({
       const res = await fetch(`/api/forms/${formId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title, schema: { fields }, settings, theme, bumpVersion: true }),
+        body: JSON.stringify({ title, description, schema: { fields }, settings, theme, bumpVersion: true }),
       });
       if (res.ok) {
         setSaveState("saved");
@@ -217,7 +220,7 @@ export function FormBuilder({
       if (saveTimer.current) clearTimeout(saveTimer.current);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [title, fields, settings, theme, toast]);
+  }, [title, description, fields, settings, theme, toast]);
 
   const addField = useCallback((type: FieldType) => {
     const field = blankField(type);
@@ -373,11 +376,19 @@ export function FormBuilder({
           >
             <ArrowLeft size={15} />
           </Link>
-          <input
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            className="w-56 bg-transparent font-display text-lg text-ink outline-none"
-          />
+          <div className="flex flex-col">
+            <input
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              className="w-56 bg-transparent font-display text-lg text-ink outline-none"
+            />
+            <input
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="Form description (optional)"
+              className="w-72 bg-transparent font-body text-xs text-muted outline-none"
+            />
+          </div>
           <span
             className={`rounded-full px-2.5 py-0.5 font-body text-[10.5px] font-semibold ${
               status === "published" ? "bg-emerald-50 text-success" : "bg-amber-50 text-amber-700"
@@ -489,7 +500,7 @@ export function FormBuilder({
       )}
 
       {tab === "themes" && (
-        <ThemesTab title={title} fields={fields} theme={theme} onThemeChange={setTheme} settings={settings} />
+        <ThemesTab title={title} description={description} fields={fields} theme={theme} onThemeChange={setTheme} settings={settings} />
       )}
 
       {tab === "integrations" && (
@@ -1065,12 +1076,14 @@ function Toggle({ checked, onChange }: { checked: boolean; onChange: (v: boolean
 
 function ThemesTab({
   title,
+  description,
   fields,
   theme,
   onThemeChange,
   settings,
 }: {
   title: string;
+  description: string;
   fields: FormField[];
   theme: ThemeKey;
   onThemeChange: (t: ThemeKey) => void;
@@ -1105,6 +1118,7 @@ function ThemesTab({
           <h3 className="mb-3 font-display text-[15px] font-semibold text-ink">Live preview</h3>
           <div className="rounded-2xl border border-line bg-white p-7 shadow-sm">
             <p className="mb-1 font-display text-lg text-ink">{title}</p>
+            {description && <p className="mb-4 font-body text-xs text-muted">{description}</p>}
             <p className="mb-6 font-body text-xs text-muted">This is exactly how respondents will see it.</p>
             {dataFieldCount === 0 ? (
               <p className="font-body text-xs text-muted">Add fields in the Fields tab to preview them here.</p>

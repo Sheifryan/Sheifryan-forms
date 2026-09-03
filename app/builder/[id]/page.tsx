@@ -13,7 +13,7 @@ export default async function BuilderPage({ params }: { params: { id: string } }
 
   const { data: form } = await supabase
     .from("forms")
-    .select("id, title, schema, owner_id, status, settings, theme, storage_used_bytes")
+    .select("id, title, description, schema, owner_id, status, settings, theme, storage_used_bytes")
     .eq("id", params.id)
     .eq("owner_id", user.id)
     .single();
@@ -50,6 +50,7 @@ export default async function BuilderPage({ params }: { params: { id: string } }
     <FormBuilder
       formId={form.id}
       initialTitle={form.title}
+      initialDescription={(form.description as string) ?? ""}
       initialSchema={(form.schema as FormSchema) ?? { fields: [] }}
       initialStatus={form.status}
       initialSettings={(form.settings as FormSettings) ?? defaultSettings}
