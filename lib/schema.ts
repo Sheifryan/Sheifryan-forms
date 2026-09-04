@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { isUgMobileMoneyPhone, normalizeUgPhone } from "@/lib/phone";
 
 // ---- Field type catalogue -------------------------------------------------
 // Every field the builder can place, and every field the renderer knows how
@@ -238,6 +239,47 @@ export interface PaymentAnswer {
   updatedAt?: string | null;
 }
 
+/** Human-readable labels for each payment status. */
+export const PAYMENT_STATUS_LABELS: Record<PaymentStatus, string> = {
+  pending: "Pending approval",
+  processing: "Processing",
+  completed: "Paid",
+  failed: "Failed",
+  cancelled: "Cancelled",
+};
+
+/** Format a number as a UGX amount string, e.g. 11500 -> "UGX 11,500". */
+export function formatUgx(value: number | null | undefined): string {
+  const n = Number.isFinite(value) ? Number(value) : 0;
+  return `UGX ${n.toLocaleString("en-UG")}`;
+}
+
+/**
+ * Human-readable one-liner for a stored payment answer
+ * ("UGX 11,500 · Paid", "UGX 11,500 · Processing", ...). Returns null when
+ * the value isn't PaymentAnswer-shaped.
+ */
+export function paymentAnswerSummary(value: unknown): string | null {
+  if (typeof value !== "object" || value === null) return null;
+  const v = value as Partial<PaymentAnswer>;
+  if (v.status === undefined && v.totalUgx === undefined && v.amount === undefined) return null;
+
+  let amountText: string;
+  if (typeof v.totalUgx === "number" && Number.isFinite(v.totalUgx)) {
+    amountText = formatUgx(v.totalUgx);
+  } else if (typeof v.amount === "number" && Number.isFinite(v.amount)) {
+    amountText = v.currency === "USD" ? `USD ${v.amount.toLocaleString("en-US")}` : formatUgx(v.amount);
+  } else {
+    amountText = "Amount unavailable";
+  }
+
+  let label = "Pending";
+  if (v.status && v.status in PAYMENT_STATUS_LABELS) label = PAYMENT_STATUS_LABELS[v.status as PaymentStatus];
+  else if (v.status) label = v.status;
+
+  return `${amountText} · ${label}`;
+}
+
 /** Compute the UGX charge for a payment amount (conversion + tax). */
 export function computePaymentCharge(
   amount: number,
@@ -330,9 +372,16 @@ export function zodSchemaForField(field: FormField): z.ZodTypeAny {
     case "url":
       schema = z.string().url("Enter a valid URL");
       break;
-    case "phone":
-      schema = z.string().min(7, "Enter a valid phone number");
+    case "phone": {
+      // Accepts strings or numbers and canonicalises Uganda mobile shapes to
+      // +256…; non-UG numbers are kept as typed (only lightly validated).
+      schema = z
+        .union([z.string(), z.number()])
+        .transform((v) => String(v).trim())
+        .refine((s) => s.length >= 7, "Enter a valid phone number")
+        .transform((s) => normalizeUgPhone(s) ?? s);
       break;
+    }
     case "number":
       schema = z.coerce.number({ invalid_type_error: "Enter a number" });
       break;
@@ -367,19 +416,32 @@ export function zodSchemaForField(field: FormField): z.ZodTypeAny {
     }
     case "payment": {
       // The renderer submits a draft; the server enriches it into a PaymentAnswer.
+      // Fixed-amount fields don't send `amount`, and `currency` defaults from
+      // the field's paymentConfig — both are optional here. `chargePayments()`
+      // (submit route) is the authoritative resolver for amounts, currency and
+      // the mobile-money phone; this schema only guards the draft's shape and
+      // obvious format mistakes so respondents get clear per-field messages.
       schema = z
         .object({
           // amount is number|string to tolerate the input's raw string form.
-          amount: z.union([z.number(), z.string()]),
-          currency: z.enum(["UGX", "USD"]),
-          phoneNumber: z.string().optional(),
+          amount: z.union([z.number(), z.string()]).optional(),
+          currency: z.enum(["UGX", "USD"]).optional(),
+          phoneNumber: z.union([z.string(), z.number()]).optional(),
         })
         .refine(
           (v) => {
+            if (v.amount === undefined || v.amount === null || v.amount === "") return true;
             const n = typeof v.amount === "number" ? v.amount : Number(v.amount);
             return Number.isFinite(n) && Number(n) > 0;
           },
           { message: "Enter a valid payment amount", path: ["amount"] }
+        )
+        .refine((v) => !v.phoneNumber || isUgMobileMoneyPhone(v.phoneNumber), {
+          message: "Enter a valid mobile money number (e.g. +2567…).",
+          path: ["phoneNumber"],
+        })
+        .transform((v) =>
+          v.phoneNumber ? { ...v, phoneNumber: normalizeUgPhone(v.phoneNumber) ?? String(v.phoneNumber) } : v
         );
       break;
     }

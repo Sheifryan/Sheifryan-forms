@@ -1,10 +1,5 @@
 import { createHmac, timingSafeEqual } from "crypto";
-import {
-  computePaymentCharge,
-  type PaymentAnswer,
-  type PaymentCurrency,
-  type PaymentFieldConfig,
-} from "@/lib/schema";
+import { computePaymentCharge, type PaymentAnswer, type PaymentCurrency, type PaymentFieldConfig } from "@/lib/schema";
 
 // Server-only MarzPay integration.
 // Docs: https://wallet.wearemarz.com/documentation
@@ -46,7 +41,22 @@ async function marzpayFetch<T>(path: string, init?: RequestInit): Promise<T> {
   };
 
   if (!res.ok || data.status === "error") {
-    const err = new Error(data.message || data.error_code || `MarzPay HTTP ${res.status}`) as Error & {
+    // MarzPay errors carry a short `message`, an `error_code`, and for
+    // request-validation failures per-field `errors`. Surface the first
+    // concrete field error so generic "Validation failed"-style responses are
+    // never mistaken for a credentials problem (UNAUTHORIZED is the bad
+    // api key/secret code).
+    let message = data.message || data.error_code || `MarzPay HTTP ${res.status}`;
+    const details = data.errors
+      ? Object.entries(data.errors)
+          .slice(0, 3)
+          .map(([k, v]) => `${k}: ${Array.isArray(v) ? v[0] : String(v)}`)
+          .join(", ")
+      : "";
+    if (details) message = `${message} (${data.error_code ?? "VALIDATION_ERROR"} — ${details})`;
+    else if (data.error_code && !message.includes(data.error_code)) message = `${message} (${data.error_code})`;
+
+    const err = new Error(message) as Error & {
       statusCode?: number;
       errorCode?: string;
     };
@@ -194,9 +204,7 @@ export function verifyMarzpayWebhook(secret: string, rawBody: string, header: st
   if (!secret || !header) return false;
   const { t, v1 } = parseMarzpaySignatureHeader(header);
   if (!t || !v1) return false;
-  const expected = createHmac("sha256", secret)
-    .update(`${t}.${rawBody}`)
-    .digest("hex");
+  const expected = createHmac("sha256", secret).update(`${t}.${rawBody}`).digest("hex");
   const a = Buffer.from(expected, "utf8");
   const b = Buffer.from(v1, "utf8");
   return a.length === b.length && timingSafeEqual(a, b);

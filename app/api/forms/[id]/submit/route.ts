@@ -13,12 +13,9 @@ import {
   type PaymentCurrency,
   type PaymentFieldConfig,
 } from "@/lib/schema";
-import {
-  buildSubmissionPayload,
-  deliverWebhook,
-  webhooksForEvent,
-} from "@/lib/webhooks";
+import { buildSubmissionPayload, deliverWebhook, webhooksForEvent } from "@/lib/webhooks";
 import { buildPaymentAnswer, initiateCollection, marzpayConfigured } from "@/lib/marzpay";
+import { isUgMobileMoneyPhone, normalizeUgPhone } from "@/lib/phone";
 
 // Extremely simple in-memory rate limit for demo purposes. Swap for
 // Upstash Redis (or similar) before shipping — this resets on every deploy
@@ -90,8 +87,8 @@ async function handleSubmit(request: Request, id: string) {
     const bodyToken = typeof body.accessToken === "string" ? body.accessToken : "";
     const service = createServiceClient();
     const { data: hashRow } = await service.from("forms").select("password_hash").eq("id", id).single();
-    const verified = Boolean(hashRow?.password_hash) &&
-      (cookieValue === hashRow.password_hash || bodyToken === hashRow.password_hash);
+    const verified =
+      Boolean(hashRow?.password_hash) && (cookieValue === hashRow.password_hash || bodyToken === hashRow.password_hash);
     if (!verified) {
       return NextResponse.json({ error: "This form requires a password." }, { status: 401 });
     }
@@ -227,8 +224,7 @@ interface ChargedPayment {
 }
 
 type PaymentResult =
-  | { ok: true; payments: ChargedPayment[] }
-  | { ok: false; statusCode: number; fieldErrors: Record<string, string> };
+  { ok: true; payments: ChargedPayment[] } | { ok: false; statusCode: number; fieldErrors: Record<string, string> };
 
 /**
  * For every visible payment field, compute the UGX charge and initiate a
@@ -269,7 +265,11 @@ async function chargePayments(
 
     // Resolve amount.
     const amount =
-      cfg.amountMode === "fixed" ? cfg.fixedAmount : typeof draft.amount === "number" ? draft.amount : Number(draft.amount);
+      cfg.amountMode === "fixed"
+        ? cfg.fixedAmount
+        : typeof draft.amount === "number"
+          ? draft.amount
+          : Number(draft.amount);
     if (!Number.isFinite(amount) || amount <= 0) {
       fieldErrors[field.id] = "Enter a valid payment amount";
       continue;
@@ -284,15 +284,19 @@ async function chargePayments(
     }
 
     // Resolve phone number: inline draft or a linked phone field's answer.
-    let phone = (draft.phoneNumber ?? "").trim();
+    let phone = (draft.phoneNumber ?? "").toString().trim();
     if (!phone && cfg.phoneFieldId) {
-      phone = String(answers[cfg.phoneFieldId] ?? "").trim();
+      const linked = answers[cfg.phoneFieldId];
+      phone = linked === undefined || linked === null ? "" : String(linked).trim();
     }
+    // Canonicalise whatever the respondent typed (077…, +2567…, 2567…, spaces
+    // and dashes, even a bare 7XXXXXXXX) to E.164 "+256…" before charging.
+    phone = normalizeUgPhone(phone) ?? phone.replace(/[\s-]/g, "");
     if (!phone) {
       fieldErrors[field.id] = "A mobile money number is required for payment.";
       continue;
     }
-    if (!/^\+?\d{9,15}$/.test(phone.replace(/[\s-]/g, ""))) {
+    if (!isUgMobileMoneyPhone(phone)) {
       fieldErrors[field.id] = "Enter a valid mobile money number (e.g. +2567…).";
       continue;
     }
