@@ -3,8 +3,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Search, Download, MoreVertical, Inbox, ArrowLeft, Paperclip } from "lucide-react";
-import type { FormField, FormSchema, UploadedFileRef } from "@/lib/schema";
-import { formatBytes } from "@/lib/schema";
+import { formatBytes, formatUgx, paymentAnswerSummary, PAYMENT_STATUS_LABELS } from "@/lib/schema";
+import type { FormField, FormSchema, PaymentAnswer, PaymentStatus, UploadedFileRef } from "@/lib/schema";
 
 interface FormRow {
   id: string;
@@ -32,6 +32,13 @@ function answerDisplay(field: FormField, value: unknown): string {
     const arr = Array.isArray(value) ? (value as UploadedFileRef[]) : [];
     if (arr.length === 0) return "—";
     return arr.map((r) => r.name || String(r)).join(", ");
+  }
+  if (field.type === "payment") {
+    // Stored payment answers are PaymentAnswer objects; show a readable
+    // "amount · status" summary instead of "[object Object]".
+    const summary = paymentAnswerSummary(value);
+    if (summary) return summary;
+    return value ? JSON.stringify(value) : "—";
   }
   return String(value);
 }
@@ -190,6 +197,8 @@ export function SubmissionsClient({
                     <span className="flex-1 text-right font-body text-sm text-ink">
                       {f.type === "file" ? (
                         <FileAnswerDisplay value={openResponse.answers[f.id]} urls={signedUrls} />
+                      ) : f.type === "payment" ? (
+                        <PaymentAnswerDisplay value={openResponse.answers[f.id]} />
                       ) : (
                         answerDisplay(f, openResponse.answers[f.id])
                       )}
@@ -288,6 +297,50 @@ function FileAnswerDisplay({ value, urls }: { value: unknown; urls: Record<strin
       {missing > 0 && (
         <p className="font-body text-[10px] text-muted">Some links are still loading — refresh to re-generate them.</p>
       )}
+    </div>
+  );
+}
+
+function PaymentAnswerDisplay({ value }: { value: unknown }) {
+  const v = (typeof value === "object" && value !== null ? value : {}) as Partial<PaymentAnswer>;
+  if (v.status === undefined && v.totalUgx === undefined && v.amount === undefined) {
+    return <span className="text-muted">{value ? JSON.stringify(value) : "—"}</span>;
+  }
+
+  const status = (v.status ?? "processing") as PaymentStatus;
+  const label =
+    v.status && v.status in PAYMENT_STATUS_LABELS ? PAYMENT_STATUS_LABELS[status] : (v.status ?? "Processing");
+  const chipCls =
+    status === "completed"
+      ? "bg-emerald-100 text-emerald-700"
+      : status === "failed"
+        ? "bg-rose-100 text-rose-700"
+        : status === "cancelled"
+          ? "bg-stone-200 text-stone-600"
+          : "bg-amber-100 text-amber-700";
+
+  const amount =
+    typeof v.totalUgx === "number" && Number.isFinite(v.totalUgx)
+      ? formatUgx(v.totalUgx)
+      : typeof v.amount === "number" && Number.isFinite(v.amount)
+        ? v.currency === "USD"
+          ? `USD ${v.amount.toLocaleString("en-US")}`
+          : formatUgx(v.amount)
+        : "Amount unavailable";
+
+  return (
+    <div className="flex flex-col items-end gap-1.5">
+      <span className="flex items-center gap-2">
+        <span className="font-body text-sm font-semibold text-ink">{amount}</span>
+        <span className={`rounded-full px-2 py-0.5 font-body text-[10px] font-bold uppercase tracking-wide ${chipCls}`}>
+          {label}
+        </span>
+      </span>
+      {v.phoneNumber && <span className="font-body text-xs text-muted">{v.phoneNumber}</span>}
+      {typeof v.reference === "string" && (
+        <span className="font-mono text-[10px] text-muted">Ref {v.reference.slice(0, 8)}</span>
+      )}
+      {v.error && <span className="font-body text-xs text-warn">{v.error}</span>}
     </div>
   );
 }

@@ -18,6 +18,7 @@ export function PublicFormClient({
   const toast = useToast();
   const [pendingRefs, setPendingRefs] = useState<string[] | null>(null);
   const [paymentDone, setPaymentDone] = useState(false);
+  const [paymentFailed, setPaymentFailed] = useState(false);
 
   async function handleSubmit(answers: Record<string, unknown>) {
     const res = await fetch(`/api/forms/${formId}/submit`, {
@@ -52,18 +53,32 @@ export function PublicFormClient({
       return (
         <div className="rounded-lg border border-line bg-white p-6 text-center">
           <p className="font-body text-sm font-medium text-ink">
-            {settings?.confirmationMessage ?? "Thanks — your response has been recorded."}
+            {paymentFailed
+              ? "Your response is saved, but one of the payments wasn't completed."
+              : (settings?.confirmationMessage ?? "Thanks — your response has been recorded.")}
           </p>
         </div>
       );
     }
     return (
-      <PaymentProcessing formId={formId} refs={pendingRefs} onDone={() => setPaymentDone(true)} />
+      <PaymentProcessing
+        formId={formId}
+        refs={pendingRefs}
+        onDone={(failed) => {
+          setPaymentFailed(failed);
+          setPaymentDone(true);
+        }}
+      />
     );
   }
 
   return (
-    <FormRenderer schema={schema} onSubmit={handleSubmit} settings={settings} uploadUrl={`/api/forms/${formId}/upload`} />
+    <FormRenderer
+      schema={schema}
+      onSubmit={handleSubmit}
+      settings={settings}
+      uploadUrl={`/api/forms/${formId}/upload`}
+    />
   );
 }
 
@@ -79,10 +94,9 @@ function PaymentProcessing({
 }: {
   formId: string;
   refs: string[];
-  onDone: () => void;
+  onDone: (failed: boolean) => void;
 }) {
   const [rows, setRows] = useState<PaymentRow[]>([]);
-  const [error, setError] = useState<string | null>(null);
   const onDoneRef = useRef(onDone);
   useEffect(() => {
     onDoneRef.current = onDone;
@@ -94,25 +108,24 @@ function PaymentProcessing({
 
     async function poll() {
       try {
-        const res = await fetch(
-          `/api/forms/${formId}/payments/status?refs=${encodeURIComponent(refs.join(","))}`,
-          { cache: "no-store" }
-        );
+        const res = await fetch(`/api/forms/${formId}/payments/status?refs=${encodeURIComponent(refs.join(","))}`, {
+          cache: "no-store",
+        });
         if (cancelled) return;
         const data = await res.json().catch(() => ({}));
         const paymentRows: PaymentRow[] = Array.isArray(data.payments) ? data.payments : [];
         setRows(paymentRows);
 
-        if (paymentRows.length > 0 && paymentRows.every((r) => ["completed", "failed", "cancelled"].includes(r.status))) {
-          if (paymentRows.some((r) => r.status === "failed" || r.status === "cancelled")) {
-            setError("One of the payments wasn&rsquo;t completed. Your response is saved, but the payment failed.");
-          }
-          onDoneRef.current();
+        if (
+          paymentRows.length > 0 &&
+          paymentRows.every((r) => ["completed", "failed", "cancelled"].includes(r.status))
+        ) {
+          const anyFailed = paymentRows.some((r) => r.status === "failed" || r.status === "cancelled");
+          onDoneRef.current(anyFailed);
           return;
         }
       } catch {
         // Transient error — keep polling.
-
       }
       timer = setTimeout(poll, 4000);
     }
@@ -128,20 +141,22 @@ function PaymentProcessing({
       <Loader2 size={20} className="mx-auto mb-2 animate-spin text-[var(--accent)]" />
       <p className="mb-1 font-body text-sm font-semibold text-ink">Waiting for payment…</p>
       <p className="mb-4 font-body text-xs text-muted">
-        Approve the mobile money prompt on your phone to complete your submission.</p>
+        Approve the mobile money prompt on your phone to complete your submission.
+      </p>
 
       {rows.length > 0 && (
         <div className="mx-auto mb-3 max-w-xs space-y-1">
           {rows.map((r) => (
-            <div key={r.reference} className="flex items-center justify-between rounded-md border border-line bg-paper px-2.5 py-1.5 font-body text-[11px] text-ink">
+            <div
+              key={r.reference}
+              className="flex items-center justify-between rounded-md border border-line bg-paper px-2.5 py-1.5 font-body text-[11px] text-ink"
+            >
               <span className="truncate">{r.reference.slice(0, 8)}</span>
               <span className="capitalize text-muted">{r.status}</span>
             </div>
           ))}
         </div>
       )}
-
-      {error && <p className="font-body text-xs text-warn">{error}</p>}
     </div>
   );
 }
