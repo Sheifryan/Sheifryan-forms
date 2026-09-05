@@ -455,6 +455,15 @@ export function validateSubmission(
     }
   }
 
+  // The public renderers (and the embed widget) append an optional
+  // "anything else about your project" textarea to their last page. It isn't
+  // part of the form's schema, so carry it through validation explicitly and
+  // store it only when the respondent actually wrote something.
+  const extra = answers.additionalInfo;
+  if (typeof extra === "string" && extra.trim().length > 0) {
+    data.additionalInfo = extra.trim().slice(0, 5000);
+  }
+
   if (Object.keys(errors).length > 0) {
     return { success: false, errors };
   }

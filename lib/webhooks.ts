@@ -48,13 +48,18 @@ interface SubmissionContext {
 
 /** Resolve answers keyed by field id into readable {id, label, value} entries. */
 function resolveAnswers(schema: FormSchema, answers: Record<string, unknown>) {
-  return schema.fields
+  const entries = schema.fields
     .filter((f) => f.type !== "page_break")
     .map((f) => ({
       id: f.id,
       label: f.label,
       value: resolveAnswerValue(f, answers[f.id]),
     }));
+  const extra = answers.additionalInfo;
+  if (typeof extra === "string" && extra.trim().length > 0) {
+    entries.push({ id: "additionalInfo", label: "Additional information", value: extra.trim() });
+  }
+  return entries;
 }
 export function buildSubmissionPayload(
   form: { id: string; title: string; schema_version?: number },
@@ -78,10 +83,7 @@ export function buildSubmissionPayload(
   };
 }
 
-export function buildDeadlinePayload(
-  form: { id: string; title: string; closeDate?: string },
-  responseCount: number
-) {
+export function buildDeadlinePayload(form: { id: string; title: string; closeDate?: string }, responseCount: number) {
   return {
     event: "deadline",
     form: {
@@ -194,10 +196,7 @@ export async function deliverWebhook(
 }
 
 // Convenience: group configured webhooks by which events fire them.
-export function webhooksForEvent(
-  settings: FormSettings | null | undefined,
-  event: WebhookEvent
-): WebhookConfig[] {
+export function webhooksForEvent(settings: FormSettings | null | undefined, event: WebhookEvent): WebhookConfig[] {
   return (settings?.webhooks ?? []).filter((w) => w.enabled && w.events.includes(event));
 }
 

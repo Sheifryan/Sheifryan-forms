@@ -37,11 +37,15 @@ function answerDisplay(field: FormField, value: unknown): string {
 }
 
 function toCsv(fields: FormField[], responses: ResponseRow[]): string {
-  const header = ["Submitted", ...fields.map((f) => f.label)];
-  const rows = responses.map((r) => [
-    new Date(r.created_at).toISOString(),
-    ...fields.map((f) => answerDisplay(f, r.answers[f.id]).replace(/"/g, '""')),
-  ]);
+  const header = ["Submitted", ...fields.map((f) => f.label), "Additional information"];
+  const rows = responses.map((r) => {
+    const extra = typeof r.answers.additionalInfo === "string" ? r.answers.additionalInfo : "";
+    return [
+      new Date(r.created_at).toISOString(),
+      ...fields.map((f) => answerDisplay(f, r.answers[f.id]).replace(/"/g, '""')),
+      extra.replace(/"/g, '""'),
+    ];
+  });
   const escape = (v: string) => `"${v}"`;
   return [header, ...rows].map((row) => row.map(escape).join(",")).join("\n");
 }
@@ -192,6 +196,15 @@ export function SubmissionsClient({
                     </span>
                   </div>
                 ))}
+                {typeof openResponse.answers.additionalInfo === "string" &&
+                  openResponse.answers.additionalInfo.trim().length > 0 && (
+                    <div className="flex items-start justify-between gap-6 py-3">
+                      <span className="w-40 shrink-0 font-body text-xs text-muted">Additional information</span>
+                      <span className="flex-1 whitespace-pre-wrap text-right font-body text-sm text-ink">
+                        {openResponse.answers.additionalInfo}
+                      </span>
+                    </div>
+                  )}
               </div>
             </div>
           ) : filtered.length === 0 ? (

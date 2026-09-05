@@ -4,7 +4,15 @@ import { useMemo, useRef, useState } from "react";
 import { nanoid } from "nanoid";
 import { Star, ArrowLeft, ArrowRight, Paperclip, X, Loader2, Banknote } from "lucide-react";
 import type { FormField, FormSchema, FormSettings, UploadedFileRef, PaymentCurrency } from "@/lib/schema";
-import { isFieldVisible, splitIntoPages, defaultFileConfig, fileMatchesAccept, formatBytes, computePaymentCharge, defaultPaymentConfig } from "@/lib/schema";
+import {
+  isFieldVisible,
+  splitIntoPages,
+  defaultFileConfig,
+  fileMatchesAccept,
+  formatBytes,
+  computePaymentCharge,
+  defaultPaymentConfig,
+} from "@/lib/schema";
 
 interface SubmitResult {
   ok: boolean;
@@ -66,10 +74,26 @@ export function FormRenderer({ schema, onSubmit, submitLabel = "Submit", setting
     setPageIndex((p) => p + 1);
   }
 
+  // Pressing Enter in a text input would normally trigger the browser's
+  // *implicit form submission*, submitting the whole response without the
+  // user ever clicking Submit. Intercept keydown so Enter inside inputs only
+  // advances to the next page and NEVER submits — the form is sent only by an
+  // explicit click on the Submit button.
+  function handleFormKeyDown(e: React.KeyboardEvent) {
+    if (e.key !== "Enter") return;
+    const target = e.target as HTMLElement | null;
+    if (!target) return;
+    // Preserve Enter's native behaviour inside textareas (insert newline) and
+    // while a button is focused (activate it, e.g. the Submit button).
+    if (target.tagName === "TEXTAREA" || target.tagName === "BUTTON") return;
+    if (target.tagName === "INPUT" && (target as HTMLInputElement).type === "submit") return;
+    e.preventDefault();
+    if (!isLastPage) handleNext();
+  }
+
   function handleFormSubmit(e: React.FormEvent) {
-    // The browser fires submit on Enter from any unmasked text input because
-    // everything lives in one <form>. On every page except the last, that
-    // implicit submit must behave as "Next" — NOT submit the whole form.
+    // Enter-triggered implicit submits are prevented in handleFormKeyDown, so
+    // this only runs from an explicit Submit click.
     e.preventDefault();
     if (!isLastPage) {
       handleNext();
@@ -111,7 +135,7 @@ export function FormRenderer({ schema, onSubmit, submitLabel = "Submit", setting
   }
 
   return (
-    <form onSubmit={handleFormSubmit} className="space-y-6">
+    <form onSubmit={handleFormSubmit} onKeyDown={handleFormKeyDown} className="space-y-6">
       {/* Honeypot — hidden from real users, catches naive bots */}
       <input
         type="text"
@@ -142,6 +166,25 @@ export function FormRenderer({ schema, onSubmit, submitLabel = "Submit", setting
             uploadUrl={uploadUrl}
           />
         ) : null
+      )}
+
+      {isLastPage && (
+        <div>
+          <label htmlFor="additional-info" className="mb-1.5 block font-body text-sm font-medium text-ink">
+            Anything else about your project? <span className="font-normal text-muted">(optional)</span>
+          </label>
+          <p className="mb-1.5 font-body text-xs text-muted">
+            Tell us what your project is about — its goals, background, or any other relevant details.
+          </p>
+          <textarea
+            id="additional-info"
+            rows={4}
+            placeholder="Project overview, goals, background, or any other relevant details"
+            className="w-full rounded border border-line bg-white px-3 py-2 font-body text-sm text-ink outline-none focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)]"
+            value={(answers.additionalInfo as string) ?? ""}
+            onChange={(e) => setValue("additionalInfo", e.target.value)}
+          />
+        </div>
       )}
 
       <div className="flex items-center gap-2 pt-1">
@@ -338,9 +381,7 @@ function FieldInput({
           })}
         </div>
       )}
-      {field.type === "payment" && (
-        <PaymentInput field={field} value={value} onChange={onChange} />
-      )}
+      {field.type === "payment" && <PaymentInput field={field} value={value} onChange={onChange} />}
       {field.type === "file" && (
         <FileUploadInput field={field} value={value} error={error} onChange={onChange} uploadUrl={uploadUrl} />
       )}
@@ -368,8 +409,7 @@ function PaymentInput({
     phoneNumber?: string;
   };
   const currency: PaymentCurrency = draft.currency ?? cfg.currency ?? "UGX";
-  const rawAmount =
-    typeof draft.amount === "number" ? draft.amount : Number(draft.amount ?? 0);
+  const rawAmount = typeof draft.amount === "number" ? draft.amount : Number(draft.amount ?? 0);
   const amount = Number.isFinite(rawAmount) ? rawAmount : 0;
   const charge = computePaymentCharge(amount, currency, cfg.usdToUgxRate, cfg.taxRate);
   const set = (patch: Partial<typeof draft>) => onChange({ ...draft, ...patch });
@@ -411,10 +451,14 @@ function PaymentInput({
             <option value="USD">USD</option>
           </select>
         ) : (
-          <span className="rounded border border-line bg-paper px-2.5 py-1.5 font-body text-xs text-stone-600">USD</span>
+          <span className="rounded border border-line bg-paper px-2.5 py-1.5 font-body text-xs text-stone-600">
+            USD
+          </span>
         )}
         <span className="font-body text-[11px] text-muted">
-          {currency === "USD" ? `≈ UGX ${fmt(charge.totalUgx)} incl. tax` : `Total: UGX ${fmt(charge.totalUgx)} incl. tax`}
+          {currency === "USD"
+            ? `≈ UGX ${fmt(charge.totalUgx)} incl. tax`
+            : `Total: UGX ${fmt(charge.totalUgx)} incl. tax`}
         </span>
       </div>
 
@@ -550,7 +594,7 @@ function FileUploadInput({
         accept={cfg.accept.filter(Boolean).join(",") || undefined}
         disabled={maxReached}
         onChange={(e) => handleFiles(e.target.files)}
-        className="font-body text-sm text-muted file:mr-3 file:rounded file:border-0 file:bg-[var(--accent)] file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-white file:cursor-pointer"
+        className="font-body text-sm text-muted file:mr-3 file:cursor-pointer file:rounded file:border-0 file:bg-[var(--accent)] file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-white"
       />
 
       {uploading.length > 0 && (
