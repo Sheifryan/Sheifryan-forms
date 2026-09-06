@@ -3,10 +3,11 @@
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useState } from "react";
-import { Plus, ClipboardList, Folder } from "lucide-react";
+import { Plus, ClipboardList, Folder, Sparkles } from "lucide-react";
 import { THEMES, DEFAULT_THEME, type ThemeKey, type FormField } from "@/lib/schema";
 import { TEMPLATES, type FormTemplate } from "@/lib/templates";
 import { TemplateGallery } from "./TemplateGallery";
+import { AiFormModal } from "./AiFormModal";
 import { useToast } from "@/components/Toast";
 
 interface FormRow {
@@ -36,6 +37,7 @@ export function DashboardClient({
   const toast = useToast();
   const [busy, setBusy] = useState(false);
   const [galleryOpen, setGalleryOpen] = useState(false);
+  const [aiOpen, setAiOpen] = useState(false);
 
   async function createForm(title: string, fields: FormField[] = []) {
     setBusy(true);
@@ -72,7 +74,7 @@ export function DashboardClient({
         <div className="relative mb-7 overflow-hidden rounded-2xl bg-gradient-to-br from-signal via-violet-600 to-accent2 p-8 text-white">
           <h2 className="mb-1.5 font-display text-xl font-semibold">Create your next form</h2>
           <p className="mb-5 max-w-md font-body text-[13px] text-violet-100">
-            Start from a blank form, or pick a template to get going in seconds.
+            Start from a blank form, a template, or let AI draft one from a quick description.
           </p>
           <div className="flex flex-wrap gap-2">
             <button
@@ -81,6 +83,12 @@ export function DashboardClient({
               className="flex items-center gap-1.5 rounded-full bg-white px-4 py-2 font-body text-xs font-semibold text-signal transition hover:bg-violet-50 disabled:opacity-50"
             >
               <Plus size={14} /> Create new form
+            </button>
+            <button
+              onClick={() => setAiOpen(true)}
+              className="flex items-center gap-1.5 rounded-full border border-white/50 bg-white/15 px-4 py-2 font-body text-xs font-semibold text-white backdrop-blur transition hover:bg-white/30"
+            >
+              <Sparkles size={14} /> Create with AI
             </button>
             {TEMPLATES.filter((t) => t.featured)
               .slice(0, 4)
@@ -158,6 +166,8 @@ export function DashboardClient({
           onPick={(t: FormTemplate) => createForm(t.title, t.build())}
         />
       )}
+
+      {aiOpen && <AiFormModal onClose={() => setAiOpen(false)} />}
     </div>
   );
 }

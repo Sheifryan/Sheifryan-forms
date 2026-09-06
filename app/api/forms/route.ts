@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { defaultSettings, DEFAULT_THEME, type FormField } from "@/lib/schema";
+import { defaultSettings, DEFAULT_THEME, type FormField, type FormSettings } from "@/lib/schema";
 
 export async function GET() {
   const supabase = createClient();
@@ -28,7 +28,16 @@ export async function POST(request: Request) {
 
   const body = await request.json().catch(() => ({}));
   const title = typeof body.title === "string" && body.title.trim() ? body.title.trim() : "Untitled form";
+  const description = typeof body.description === "string" ? body.description.trim() : "";
   const fields: FormField[] = Array.isArray(body.fields) ? body.fields : [];
+
+  // Optional AI-authored settings. Only the confirmation message is accepted on
+  // create — everything else is edited through the builder's Settings tab.
+  const confirmationMessage =
+    typeof body.confirmationMessage === "string" && body.confirmationMessage.trim()
+      ? body.confirmationMessage.trim()
+      : defaultSettings.confirmationMessage;
+  const settings: FormSettings = { ...defaultSettings, confirmationMessage };
 
   // Optional folder to create the form in. A folder id is only trusted if it
   // belongs to the current user (folder ids are not globally unique scopes).
@@ -48,8 +57,9 @@ export async function POST(request: Request) {
     .insert({
       owner_id: user.id,
       title,
+      description: description || null,
       schema: { fields },
-      settings: defaultSettings,
+      settings,
       theme: DEFAULT_THEME,
       folder_id,
     })

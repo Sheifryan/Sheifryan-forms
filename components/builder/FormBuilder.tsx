@@ -38,6 +38,7 @@ import {
   Upload,
   CheckSquare,
   SeparatorHorizontal,
+  Sparkles,
   FileText,
   Zap,
   Settings as SettingsIcon,
@@ -71,6 +72,7 @@ import {
 } from "@/lib/schema";
 import { FieldEditor } from "./FieldEditor";
 import { IntegrationsTab } from "./IntegrationsTab";
+import { AiTab } from "./AiTab";
 import { FormRenderer } from "@/components/renderer/FormRenderer";
 import { useToast } from "@/components/Toast";
 
@@ -112,6 +114,7 @@ const TABS = [
   { id: "settings", label: "Settings", icon: SettingsIcon },
   { id: "integrations", label: "Integrations", icon: Plug },
   { id: "themes", label: "Themes", icon: Palette },
+  { id: "ai", label: "AI", icon: Sparkles },
   { id: "share", label: "Share", icon: Share2 },
 ] as const;
 type TabId = (typeof TABS)[number]["id"];
@@ -509,6 +512,21 @@ export function FormBuilder({
           settings={settings}
           onChange={(patch) => setSettings((prev) => ({ ...prev, ...patch }))}
           deliveries={deliveries}
+        />
+      )}
+
+      {tab === "ai" && (
+        <AiTab
+          formId={formId}
+          title={title}
+          description={description}
+          fields={fields}
+          status={status}
+          onJumpToField={(id) => {
+            setSelectedId(id);
+            setTab("fields");
+          }}
+          onApplyFields={setFields}
         />
       )}
 

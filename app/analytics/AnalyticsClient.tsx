@@ -1,8 +1,11 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import { Sparkles, Loader2, Brain } from "lucide-react";
 import type { FormSchema } from "@/lib/schema";
+import type { AnalysisResult } from "@/lib/ai/contracts";
+import { useToast } from "@/components/Toast";
 
 interface FormRow {
   id: string;
@@ -15,18 +18,33 @@ interface ResponseRow {
   created_at: string;
 }
 
+interface AiAnalysisView {
+  id: string;
+  createdAt: string;
+  responsesAnalyzed: number;
+  to: string | null;
+  insight: AnalysisResult;
+  model: string | null;
+}
+
 const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
 export function AnalyticsClient({
   forms,
   activeFormId,
   responses,
+  analysis,
+  newerAvailable,
 }: {
   forms: FormRow[];
   activeFormId: string | null;
   responses: ResponseRow[];
+  analysis: AiAnalysisView | null;
+  newerAvailable: boolean;
 }) {
   const router = useRouter();
+  const toast = useToast();
+  const [analyzing, setAnalyzing] = useState(false);
   const activeForm = forms.find((f) => f.id === activeFormId) || null;
   const fields = activeForm?.schema?.fields ?? [];
   const total = responses.length;
@@ -40,6 +58,30 @@ export function AnalyticsClient({
     return c;
   }, [responses]);
   const max = Math.max(1, ...counts);
+
+  async function runAnalysis() {
+    if (!activeFormId) return;
+    setAnalyzing(true);
+    try {
+      const res = await fetch("/api/ai/analyze-responses", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ formId: activeFormId }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error ?? "AI analysis failed — try again.");
+      if (data.noResponses) {
+        toast.info(data.message ?? "No responses to analyze yet.");
+      } else {
+        toast.success("AI insights generated");
+        router.refresh();
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "AI analysis failed — try again.");
+    } finally {
+      setAnalyzing(false);
+    }
+  }
 
   return (
     <div className="p-7">
@@ -76,6 +118,117 @@ export function AnalyticsClient({
               val={fields.filter((f) => f.showIf && f.showIf.length > 0).length}
               delta="using logic"
             />
+          </div>
+
+          <div className="mb-5 overflow-hidden rounded-xl border border-violet-200 bg-white shadow-sm">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line bg-gradient-to-r from-violet-50/80 to-white px-5 py-3.5">
+              <div className="flex items-center gap-2.5">
+                <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-violet-500 to-accent2 text-white">
+                  <Brain size={15} />
+                </span>
+                <div>
+                  <h3 className="font-display text-[15px] font-semibold text-ink">AI insights</h3>
+                  <p className="font-body text-[11px] text-muted">
+                    What your submissions are telling you — generated from real responses.
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={runAnalysis}
+                disabled={analyzing || total === 0}
+                className="flex items-center gap-1.5 rounded-full bg-[#6D28D9] px-4 py-2 font-body text-xs font-semibold text-white transition hover:opacity-90 disabled:opacity-50"
+              >
+                {analyzing ? <Loader2 size={13} className="animate-spin" /> : <Sparkles size={13} />}
+                {analyzing
+                  ? "Analyzing…"
+                  : analysis
+                    ? newerAvailable
+                      ? "Analyze newer responses"
+                      : "Regenerate insights"
+                    : "Generate insights"}
+              </button>
+            </div>
+
+            <div className="p-5">
+              {analyzing && !analysis && (
+                <p className="font-body text-xs text-muted">
+                  Reading the latest {Math.min(total, 300)} responses and summarizing them… this takes a few seconds.
+                </p>
+              )}
+
+              {total === 0 && !analysis && (
+                <p className="font-body text-xs text-muted">
+                  No submissions yet — once responses arrive, this card will summarize them automatically.
+                </p>
+              )}
+
+              {analysis && (
+                <>
+                  <p className="mb-4 font-display text-[15px] font-semibold leading-snug text-ink">
+                    “{analysis.insight.headline}”
+                  </p>
+
+                  {analysis.insight.insights.length > 0 && (
+                    <div className="mb-4 grid gap-2 sm:grid-cols-2">
+                      {analysis.insight.insights.map((ins, i) => (
+                        <div key={i} className="rounded-lg border border-line bg-paper px-3.5 py-3">
+                          <p className="mb-0.5 font-body text-[11px] font-bold uppercase tracking-wide text-violet-700">
+                            {ins.label}
+                          </p>
+                          <p className="font-body text-[12px] leading-relaxed text-stone-700">{ins.detail}</p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {analysis.insight.trends.length > 0 && (
+                    <div className="mb-4">
+                      <p className="mb-1.5 font-body text-[11px] font-bold uppercase tracking-wide text-muted">Trends</p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {analysis.insight.trends.map((t, i) => (
+                          <span key={i} className="rounded-full border border-violet-200 bg-violet-50 px-2.5 py-1 font-body text-[11px] text-violet-800">
+                            {t}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {analysis.insight.quotes.length > 0 && (
+                    <div className="mb-4">
+                      <p className="mb-1.5 font-body text-[11px] font-bold uppercase tracking-wide text-muted">Notable quotes</p>
+                      <div className="space-y-1.5">
+                        {analysis.insight.quotes.map((q, i) => (
+                          <blockquote key={i} className="rounded-lg border border-line bg-white px-3.5 py-2.5">
+                            <p className="font-body text-[12.5px] italic text-stone-700">“{q.text}”</p>
+                            <p className="mt-0.5 font-body text-[10.5px] font-semibold text-muted">— {q.fieldLabel}</p>
+                          </blockquote>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {analysis.insight.suggestions.length > 0 && (
+                    <div>
+                      <p className="mb-1.5 font-body text-[11px] font-bold uppercase tracking-wide text-muted">Suggestions</p>
+                      <ul className="space-y-1">
+                        {analysis.insight.suggestions.map((s, i) => (
+                          <li key={i} className="flex gap-2 font-body text-[12.5px] text-stone-700">
+                            <span className="text-violet-600">→</span>
+                            <span>{s}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
+                  <p className="mt-4 border-t border-line pt-3 font-body text-[10.5px] text-muted">
+                    Analyzed {analysis.responsesAnalyzed} response{analysis.responsesAnalyzed === 1 ? "" : "s"}
+                    {analysis.model ? ` · ${analysis.model}` : ""} · {new Date(analysis.createdAt).toLocaleString()}
+                  </p>
+                </>
+              )}
+            </div>
           </div>
 
           <div className="grid grid-cols-[1.4fr_1fr] gap-4">
