@@ -39,6 +39,25 @@ export function FormRenderer({ schema, onSubmit, submitLabel = "Submit", setting
   const [doneMessage, setDoneMessage] = useState<string | undefined>(settings?.confirmationMessage);
   const [topError, setTopError] = useState<string | null>(null);
 
+  // Guards the response against stray/implicit submit events (see
+  // handleFormSubmit). Only an explicit click on the Submit button sends it.
+  const submittedRef = useRef(false);
+  // After a page transition, briefly ignore submit attempts so a ghost tap /
+  // second click that lands on the button position can't submit the response.
+  const ignoreSubmitUntil = useRef(0);
+  const canSubmitNow = () => Date.now() >= ignoreSubmitUntil.current;
+
+  // Move between pages. We also blur the active element (the Next button is
+  // reused in place as the Submit button on the next page — without this, a
+  // stray Enter right after the transition could activate it), briefly ignore
+  // submit attempts, and scroll to the top so the new page is visible.
+  function changePage(nextIndex: number) {
+    setPageIndex(Math.max(0, Math.min(nextIndex, pages.length - 1)));
+    ignoreSubmitUntil.current = Date.now() + 700;
+    (document.activeElement as HTMLElement | null)?.blur?.();
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
   const allDataFields = schema.fields.filter((f) => f.type !== "page_break");
   const currentPage = pages[pageIndex];
   const isLastPage = pageIndex === pages.length - 1;
@@ -70,8 +89,15 @@ export function FormRenderer({ schema, onSubmit, submitLabel = "Submit", setting
 
   function handleNext() {
     const next = validateClientSide(currentPage.fields);
-    if (Object.keys(next).length > 0) return setErrors(next);
-    setPageIndex((p) => p + 1);
+    if (Object.keys(next).length > 0) {
+      setErrors(next);
+      return;
+    }
+    changePage(pageIndex + 1);
+  }
+
+  function goBack() {
+    changePage(pageIndex - 1);
   }
 
   // Pressing Enter in a text input would normally trigger the browser's
@@ -92,17 +118,24 @@ export function FormRenderer({ schema, onSubmit, submitLabel = "Submit", setting
   }
 
   function handleFormSubmit(e: React.FormEvent) {
-    // Enter-triggered implicit submits are prevented in handleFormKeyDown, so
-    // this only runs from an explicit Submit click.
     e.preventDefault();
+    // Enter/autofill/mobile "Go" keys can fire an *implicit* submit that the
+    // keydown guard can't always catch (e.g. the Next button is reused as the
+    // Submit button and keeps focus across the page change). Only a genuine
+    // click on the Submit button carries a native `submitter`, so anything else
+    // must never send the response — on earlier pages it simply behaves like
+    // "Next", and on the last page it is ignored entirely.
     if (!isLastPage) {
       handleNext();
       return;
     }
-    void handleSubmit(e);
+    const submitter = (e.nativeEvent as SubmitEvent).submitter as HTMLElement | null;
+    if (!submitter || (submitter.tagName !== "BUTTON" && submitter.tagName !== "INPUT")) return;
+    if (!canSubmitNow()) return;
+    void handleSubmit();
   }
 
-  async function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit() {
     // Only the final page reaches here: same validation as handleNext so
     // the page's required fields are enforced before the whole form is sent.
     const clientErrors = validateClientSide(currentPage.fields);
@@ -110,6 +143,8 @@ export function FormRenderer({ schema, onSubmit, submitLabel = "Submit", setting
       setErrors(clientErrors);
       return;
     }
+    if (!canSubmitNow() || submittedRef.current) return;
+    submittedRef.current = true;
     setStatus("submitting");
     setTopError(null);
     const result = await onSubmit(answers);
@@ -117,6 +152,8 @@ export function FormRenderer({ schema, onSubmit, submitLabel = "Submit", setting
       if (result.confirmationMessage) setDoneMessage(result.confirmationMessage);
       setStatus("done");
     } else {
+      // Allow retrying after a failed attempt.
+      submittedRef.current = false;
       setErrors(result.fieldErrors ?? {});
       setTopError(result.error ?? null);
       setStatus("idle");
@@ -168,30 +205,11 @@ export function FormRenderer({ schema, onSubmit, submitLabel = "Submit", setting
         ) : null
       )}
 
-      {isLastPage && (
-        <div>
-          <label htmlFor="additional-info" className="mb-1.5 block font-body text-sm font-medium text-ink">
-            Anything else about your project? <span className="font-normal text-muted">(optional)</span>
-          </label>
-          <p className="mb-1.5 font-body text-xs text-muted">
-            Tell us what your project is about — its goals, background, or any other relevant details.
-          </p>
-          <textarea
-            id="additional-info"
-            rows={4}
-            placeholder="Project overview, goals, background, or any other relevant details"
-            className="w-full rounded border border-line bg-white px-3 py-2 font-body text-sm text-ink outline-none focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)]"
-            value={(answers.additionalInfo as string) ?? ""}
-            onChange={(e) => setValue("additionalInfo", e.target.value)}
-          />
-        </div>
-      )}
-
       <div className="flex items-center gap-2 pt-1">
         {pageIndex > 0 && (
           <button
             type="button"
-            onClick={() => setPageIndex((p) => p - 1)}
+            onClick={goBack}
             className="flex items-center gap-1 rounded-md border border-line px-4 py-2.5 font-body text-sm font-medium text-ink transition hover:bg-paper"
           >
             <ArrowLeft size={14} /> Back
@@ -199,7 +217,9 @@ export function FormRenderer({ schema, onSubmit, submitLabel = "Submit", setting
         )}
         {isLastPage ? (
           <button
-            type="submit"
+            key="submit"
+            type="button"
+            onClick={() => void handleSubmit()}
             disabled={status === "submitting"}
             className="flex-1 rounded bg-[var(--accent)] px-5 py-2.5 font-body text-sm font-medium text-white transition hover:opacity-90 disabled:opacity-50"
           >
@@ -207,6 +227,7 @@ export function FormRenderer({ schema, onSubmit, submitLabel = "Submit", setting
           </button>
         ) : (
           <button
+            key="next"
             type="button"
             onClick={handleNext}
             className="flex flex-1 items-center justify-center gap-1 rounded bg-[var(--accent)] px-5 py-2.5 font-body text-sm font-medium text-white transition hover:opacity-90"

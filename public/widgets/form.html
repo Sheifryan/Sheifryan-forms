@@ -546,14 +546,6 @@ function renderForm(app) {
   page.fields.forEach(function (field) {
     if (isFieldVisible(field)) html += renderField(field);
   });
-  if (isLastPage) {
-    html += '<div class="field">' +
-      '<label class="field-label">Anything else about your project? ' +
-      '<span class="muted" style="font-weight:400">(optional)</span></label>' +
-      '<textarea id="additional-info" class="input" data-additional="1" rows="4" ' +
-      'placeholder="Project overview, goals, background, or any other relevant details">' +
-      esc(state.answers.additionalInfo || "") + '</textarea></div>';
-  }
   html += '<div class="nav-row">';
   if (state.pageIndex > 0) {
     html += '<button type="button" class="btn btn-ghost" data-action="back">&#8592; Back</button>';
@@ -743,13 +735,6 @@ function wireEvents(app) {
   });
 
   attachFileHandlers(app);
-
-  var addInfo = app.querySelector("[data-additional]");
-  if (addInfo) {
-    addInfo.addEventListener("input", function (e) {
-      state.answers.additionalInfo = e.target.value;
-    });
-  }
 
   var enterables = app.querySelectorAll(
     "input[data-field]:not([type=file]):not([type=checkbox]):not([type=radio]), textarea[data-field]"
