@@ -1,0 +1,27 @@
+services:
+  app:
+    build:
+      context: .
+      args:
+        # NEXT_PUBLIC_* vars are inlined at build time (read from your .env).
+        NEXT_PUBLIC_SUPABASE_URL: ${NEXT_PUBLIC_SUPABASE_URL}
+        NEXT_PUBLIC_SUPABASE_ANON_KEY: ${NEXT_PUBLIC_SUPABASE_ANON_KEY}
+    env_file:
+      - .env
+    environment:
+      - NODE_ENV=production
+    ports:
+      # App runs on :3000 inside the container; expose it on the host at a
+      # less-common port so it doesn't collide with other services on the VPS.
+      - "7812:3000"
+    restart: unless-stopped
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - fetch('http://127.0.0.1:3000/').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
