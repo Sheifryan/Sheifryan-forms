@@ -18,6 +18,16 @@ services:
     # this container (host ports like 7812 are only for direct host access).
     networks:
       - coolify
+    labels:
+      # Coolify generates the domain's Traefik ROUTERS for this app but omits
+      # the loadbalancer port on docker-compose deployments. Traefik's routers
+      # use their own name as the implicit service, so declaring the port for
+      # each generated router name (matching Coolify's "<type>-<index>-<uuid>-app"
+      # pattern) is all that's missing. Keep these in sync with the uuid that
+      # appears in the deployed container's router labels.
+      - traefik.http.services.http-0-mpy5075eidyf9ia145gxady4-app.loadbalancer.server.port=3000
+      - traefik.http.services.http-1-mpy5075eidyf9ia145gxady4-app.loadbalancer.server.port=3000
+      - traefik.http.services.https-1-mpy5075eidyf9ia145gxady4-app.loadbalancer.server.port=3000
     ports:
       # App runs on :3000 inside the container; expose it on the host at a
       # less-common port so it doesn't collide with other services on the VPS.
