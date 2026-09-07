@@ -20,11 +20,13 @@ services:
       - coolify
     labels:
       # Coolify generates the domain's Traefik ROUTERS for this app but omits
-      # the loadbalancer port on docker-compose deployments. Traefik's routers
-      # use their own name as the implicit service, so declaring the port for
-      # each generated router name (matching Coolify's "<type>-<index>-<uuid>-app"
-      # pattern) is all that's missing. Keep these in sync with the uuid that
-      # appears in the deployed container's router labels.
+      # the loadbalancer port AND the router→service binding on compose
+      # deployments. Mirror Coolify's working-app label set exactly: bind each
+      # router to its service and declare the port on that service. Names must
+      # match the "<type>-<index>-<uuid>-app" pattern Coolify generates.
+      - traefik.http.routers.http-0-mpy5075eidyf9ia145gxady4-app.service=http-0-mpy5075eidyf9ia145gxady4-app
+      - traefik.http.routers.http-1-mpy5075eidyf9ia145gxady4-app.service=http-1-mpy5075eidyf9ia145gxady4-app
+      - traefik.http.routers.https-1-mpy5075eidyf9ia145gxady4-app.service=https-1-mpy5075eidyf9ia145gxady4-app
       - traefik.http.services.http-0-mpy5075eidyf9ia145gxady4-app.loadbalancer.server.port=3000
       - traefik.http.services.http-1-mpy5075eidyf9ia145gxady4-app.loadbalancer.server.port=3000
       - traefik.http.services.https-1-mpy5075eidyf9ia145gxady4-app.loadbalancer.server.port=3000
