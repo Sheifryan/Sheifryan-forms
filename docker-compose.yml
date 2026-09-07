@@ -14,6 +14,10 @@ services:
         required: false
     environment:
       - NODE_ENV=production
+    # Join Coolify's proxy network so Traefik can route the app's domain to
+    # this container (host ports like 7812 are only for direct host access).
+    networks:
+      - coolify
     ports:
       # App runs on :3000 inside the container; expose it on the host at a
       # less-common port so it doesn't collide with other services on the VPS.
@@ -29,3 +33,7 @@ services:
       timeout: 5s
       retries: 3
       start_period: 20s
+
+networks:
+  coolify:
+    external: true
