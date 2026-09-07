@@ -5,3 +5,7 @@ node_modules
 *.log
 *.tsbuildinfo
 .DS_Store
+tests/ask-your-data/dist/
+
+__pycache__
+*.pyc

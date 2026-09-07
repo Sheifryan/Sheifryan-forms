@@ -2,9 +2,10 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Search, Download, MoreVertical, Inbox, ArrowLeft, Paperclip } from "lucide-react";
+import { Search, Download, MoreVertical, Inbox, ArrowLeft, Paperclip, Sparkles } from "lucide-react";
 import { formatBytes, formatUgx, paymentAnswerSummary, PAYMENT_STATUS_LABELS } from "@/lib/schema";
 import type { FormField, FormSchema, PaymentAnswer, PaymentStatus, UploadedFileRef } from "@/lib/schema";
+import { AiAnalysisPanel } from "@/components/ai-analysis/AiAnalysisPanel";
 
 interface FormRow {
   id: string;
@@ -69,6 +70,7 @@ export function SubmissionsClient({
   const router = useRouter();
   const [query, setQuery] = useState("");
   const [openId, setOpenId] = useState<string | null>(null);
+  const [view, setView] = useState<"responses" | "ai">("responses");
   const [signedUrls, setSignedUrls] = useState<Record<string, string>>({});
 
   const activeForm = forms.find((f) => f.id === activeFormId) || null;
@@ -134,14 +136,35 @@ export function SubmissionsClient({
 
   return (
     <div className="p-7">
-      <div className="mb-1 flex items-center justify-end">
-        <button
-          onClick={exportCsv}
-          disabled={!activeForm || filtered.length === 0}
-          className="flex items-center gap-1.5 rounded-full border border-line bg-white px-3.5 py-1.5 font-body text-xs font-semibold text-ink transition hover:bg-paper disabled:opacity-40"
-        >
-          <Download size={12} /> Export CSV
-        </button>
+      <div className="mb-1 flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-1 rounded-lg bg-white p-1 shadow-sm ring-1 ring-line">
+          <button
+            onClick={() => setView("responses")}
+            className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 font-body text-xs font-semibold transition ${
+              view === "responses" ? "bg-signal text-white" : "text-muted hover:text-ink"
+            }`}
+          >
+            <Inbox size={12} /> Responses
+          </button>
+          <button
+            onClick={() => setView("ai")}
+            className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 font-body text-xs font-semibold transition ${
+              view === "ai" ? "bg-signal text-white" : "text-muted hover:text-ink"
+            }`}
+          >
+            <Sparkles size={12} /> AI Analysis
+          </button>
+        </div>
+
+        {view === "responses" && (
+          <button
+            onClick={exportCsv}
+            disabled={!activeForm || filtered.length === 0}
+            className="flex items-center gap-1.5 rounded-full border border-line bg-white px-3.5 py-1.5 font-body text-xs font-semibold text-ink transition hover:bg-paper disabled:opacity-40"
+          >
+            <Download size={12} /> Export CSV
+          </button>
+        )}
       </div>
 
       <div className="mb-5 flex items-center gap-2 font-body text-xs text-muted">
@@ -162,6 +185,12 @@ export function SubmissionsClient({
 
       {forms.length === 0 ? (
         <EmptyState text="Create a form first from the dashboard." />
+      ) : view === "ai" ? (
+        activeForm ? (
+          <AiAnalysisPanel key={activeForm.id} formId={activeForm.id} formTitle={activeForm.title} />
+        ) : (
+          <EmptyState text="Select a form to start asking questions." />
+        )
       ) : (
         <>
           <div className="mb-3.5 flex flex-wrap items-center justify-between gap-2.5">
