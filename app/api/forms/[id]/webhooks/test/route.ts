@@ -18,7 +18,7 @@ export async function POST(request: Request, { params }: { params: { id: string 
     .from("forms")
     .select("id, title, schema, schema_version, settings")
     .eq("id", params.id)
-    .eq("owner_id", user.id)
+    
     .single();
 
   if (formError || !form) return NextResponse.json({ error: "Form not found" }, { status: 404 });

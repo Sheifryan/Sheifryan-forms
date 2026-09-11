@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { defaultSettings, DEFAULT_THEME, type FormField, type FormSettings } from "@/lib/schema";
+import { resolveActiveWorkspace } from "@/lib/workspace-server";
+import { logActivity } from "@/lib/activity";
 
 export async function GET() {
   const supabase = createClient();
@@ -9,12 +11,11 @@ export async function GET() {
   } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const { data, error } = await supabase
-    .from("forms")
-    .select("id, title, status, updated_at, created_at")
-    .eq("owner_id", user.id)
-    .order("updated_at", { ascending: false });
+  let query = supabase.from("forms").select("id, title, status, updated_at, created_at").order("updated_at", { ascending: false });
+  const { workspace } = await resolveActiveWorkspace();
+  if (workspace) query = query.eq("workspace_id", workspace.id);
 
+  const { data, error } = await query;
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ forms: data });
 }
@@ -25,6 +26,9 @@ export async function POST(request: Request) {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const { workspace } = await resolveActiveWorkspace();
+  const workspaceId = workspace?.id;
 
   const body = await request.json().catch(() => ({}));
   const title = typeof body.title === "string" && body.title.trim() ? body.title.trim() : "Untitled form";
@@ -40,32 +44,41 @@ export async function POST(request: Request) {
   const settings: FormSettings = { ...defaultSettings, confirmationMessage };
 
   // Optional folder to create the form in. A folder id is only trusted if it
-  // belongs to the current user (folder ids are not globally unique scopes).
+  // belongs to the current user's workspace (folder ids are not globally
+  // unique scopes).
   let folder_id: string | null = null;
   if (typeof body.folderId === "string" && body.folderId) {
-    const { data: owned } = await supabase
-      .from("folders")
-      .select("id")
-      .eq("id", body.folderId)
-      .eq("owner_id", user.id)
-      .maybeSingle();
+    let ownedQuery = supabase.from("folders").select("id").eq("id", body.folderId);
+    if (workspaceId) ownedQuery = ownedQuery.eq("workspace_id", workspaceId);
+    const { data: owned } = await ownedQuery.maybeSingle();
     if (owned) folder_id = owned.id;
   }
 
-  const { data, error } = await supabase
-    .from("forms")
-    .insert({
-      owner_id: user.id,
-      title,
-      description: description || null,
-      schema: { fields },
-      settings,
-      theme: DEFAULT_THEME,
-      folder_id,
-    })
-    .select("id")
-    .single();
+  const insert: Record<string, unknown> = {
+    owner_id: user.id,
+    title,
+    description: description || null,
+    schema: { fields },
+    settings,
+    theme: DEFAULT_THEME,
+    folder_id,
+  };
+  if (workspaceId) insert.workspace_id = workspaceId;
+
+  const { data, error } = await supabase.from("forms").insert(insert).select("id").single();
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  // Audit trail (organisation feed). Never blocks the create.
+  if (workspaceId) {
+    await logActivity({
+      workspaceId,
+      action: "form.created",
+      resourceType: "form",
+      resourceId: data.id,
+      resourceLabel: title,
+    });
+  }
+
   return NextResponse.json({ id: data.id }, { status: 201 });
 }

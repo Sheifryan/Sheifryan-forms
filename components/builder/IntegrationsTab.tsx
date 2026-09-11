@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { nanoid } from "nanoid";
+import { useFormat } from "@/components/FormatProvider";
 import {
   Webhook as WebhookIcon,
   Plus,
@@ -51,6 +52,7 @@ function isObjectUrl(value: string): boolean {
 }
 
 export function IntegrationsTab({ formId, settings, onChange, deliveries: initialDeliveries }: Props) {
+  const { formatTime } = useFormat();
   const webhooks = settings.webhooks ?? [];
   const [editingId, setEditingId] = useState<string | null>(null); // null | "new" | existing id
   const [draft, setDraft] = useState({ ...EMPTY_DRAFT });
@@ -299,7 +301,7 @@ return (
                     {d.statusCode ?? "—"} {d.durationMs != null ? `· ${d.durationMs}ms` : ""}
                   </span>
                   <span className="shrink-0 font-body text-[10px] text-muted">
-                    {new Date(d.createdAt).toLocaleTimeString()}
+                    {formatTime(d.createdAt)}
                   </span>
                 </div>
               ))}

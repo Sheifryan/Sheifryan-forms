@@ -1,36 +1,10 @@
 import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
-import { AppShell } from "@/components/AppShell";
-import { SubmissionsClient } from "./SubmissionsClient";
 
-export default async function SubmissionsPage({ searchParams }: { searchParams: { form?: string } }) {
-  const supabase = createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) redirect("/login");
-
-  const { data: forms } = await supabase
-    .from("forms")
-    .select("id, title, schema")
-    .eq("owner_id", user.id)
-    .order("updated_at", { ascending: false });
-
-  const activeFormId = searchParams.form ?? forms?.[0]?.id ?? null;
-
-  let responses: { id: string; answers: Record<string, unknown>; created_at: string }[] = [];
-  if (activeFormId) {
-    const { data } = await supabase
-      .from("responses")
-      .select("id, answers, created_at")
-      .eq("form_id", activeFormId)
-      .order("created_at", { ascending: false });
-    responses = data ?? [];
-  }
-
-  return (
-    <AppShell active="submissions" title="Submissions" userEmail={user.email}>
-      <SubmissionsClient forms={forms ?? []} activeFormId={activeFormId} responses={responses} />
-    </AppShell>
-  );
+// The Responses section replaced the older Submissions area. Keep the URL
+// working so bookmarks and the analytics links keep pointing somewhere real.
+export default function SubmissionsPage({ searchParams }: { searchParams: { form?: string } }) {
+  const params = new URLSearchParams();
+  if (searchParams.form) params.set("form", searchParams.form);
+  const query = params.toString();
+  redirect(`/responses${query ? `?${query}` : ""}`);
 }

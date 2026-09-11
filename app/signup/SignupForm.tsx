@@ -52,9 +52,9 @@ export function SignupForm() {
     }
 
     // When the Supabase "Confirm email" toggle is OFF, a session comes back
-    // immediately and we can drop the user straight into the app.
+    // immediately and we can drop the user into the onboarding flow.
     if (data.session) {
-      router.push("/dashboard");
+      router.push("/onboarding");
       router.refresh();
       return;
     }

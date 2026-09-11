@@ -18,7 +18,7 @@ export async function POST(request: Request, { params }: { params: { id: string 
     .from("forms")
     .select("id")
     .eq("id", params.id)
-    .eq("owner_id", user.id)
+    
     .maybeSingle();
   if (ownerError || !owned) return NextResponse.json({ error: "Form not found" }, { status: 404 });
 

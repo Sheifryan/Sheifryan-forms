@@ -1,6 +1,7 @@
 import type { Config } from "tailwindcss";
 
 const config: Config = {
+  darkMode: "class",
   content: ["./app/**/*.{ts,tsx}", "./components/**/*.{ts,tsx}"],
   theme: {
     extend: {
@@ -15,6 +16,12 @@ const config: Config = {
         accent2: "#C026D3", // fuchsia-600 — secondary accent (gradients, avatars)
         success: "#059669", // emerald-600
         warn: "#E11D48", // rose-600
+        // Dark-mode semantic palette (paired with `dark:` variants).
+        night: "#0B1220",
+        panelDark: "#111B30",
+        lineDark: "#26344A",
+        inkDark: "#E6EAF2",
+        mutedDark: "#8293AD",
       },
       fontFamily: {
         display: ["'Space Grotesk'", "sans-serif"],

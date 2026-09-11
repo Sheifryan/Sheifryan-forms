@@ -1,6 +1,8 @@
 import { redirect, notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { resolveProfile } from "@/lib/workspace-server";
 import { FormBuilder } from "@/components/builder/FormBuilder";
+import { FormatProvider } from "@/components/FormatProvider";
 import type { FormSchema, FormSettings, ThemeKey, WebhookDelivery } from "@/lib/schema";
 import { defaultSettings, DEFAULT_THEME } from "@/lib/schema";
 
@@ -15,10 +17,10 @@ export default async function BuilderPage({ params }: { params: { id: string } }
     .from("forms")
     .select("id, title, description, schema, owner_id, status, settings, theme, storage_used_bytes")
     .eq("id", params.id)
-    .eq("owner_id", user.id)
+    
     .single();
 
-  if (!form || form.owner_id !== user.id) notFound();
+  if (!form) notFound();
 
   // File storage stats for the Settings tab's storage card.
   const { count: fileCount } = await supabase
@@ -46,18 +48,47 @@ export default async function BuilderPage({ params }: { params: { id: string } }
     createdAt: r.created_at,
   }));
 
+  // Who this form is shared with (migration 0013). Absent before that
+  // migration — the avatar stack simply renders empty.
+  let collaborators: { userId: string; name: string | null; email: string | null; avatarUrl: string | null }[] = [];
+  const { data: memberRows, error: memberError } = await supabase
+    .from("form_members")
+    .select("user_id, role")
+    .eq("form_id", params.id);
+  if (!memberError && (memberRows ?? []).length > 0) {
+    const ids = (memberRows ?? []).map((m) => m.user_id);
+    const { data: profs } = await supabase.from("profiles").select("id, full_name, email, avatar_url").in("id", ids);
+    collaborators = (memberRows ?? []).map((m) => {
+      const p = (profs ?? []).find((x) => x.id === m.user_id);
+      return {
+        userId: m.user_id,
+        name: p?.full_name ?? null,
+        email: p?.email ?? null,
+        avatarUrl: p?.avatar_url ?? null,
+      };
+    });
+  }
+
+  // The builder sits outside AppShell, so it needs its own formatting context
+  // (the Integrations tab renders delivery timestamps).
+  const { profile } = await resolveProfile();
+  const prefs = profile?.preferences ?? {};
+
   return (
-    <FormBuilder
-      formId={form.id}
-      initialTitle={form.title}
-      initialDescription={(form.description as string) ?? ""}
-      initialSchema={(form.schema as FormSchema) ?? { fields: [] }}
-      initialStatus={form.status}
-      initialSettings={(form.settings as FormSettings) ?? defaultSettings}
-      initialTheme={(form.theme as ThemeKey) ?? DEFAULT_THEME}
-      storageBytes={(form.storage_used_bytes as number) ?? 0}
-      fileCount={fileCount ?? 0}
-      deliveries={deliveries}
-    />
+    <FormatProvider locale={prefs.language ?? null} timeZone={prefs.timezone ?? null}>
+      <FormBuilder
+        formId={form.id}
+        initialTitle={form.title}
+        initialDescription={(form.description as string) ?? ""}
+        initialSchema={(form.schema as FormSchema) ?? { fields: [] }}
+        initialStatus={form.status}
+        initialSettings={(form.settings as FormSettings) ?? defaultSettings}
+        initialTheme={(form.theme as ThemeKey) ?? DEFAULT_THEME}
+        storageBytes={(form.storage_used_bytes as number) ?? 0}
+        fileCount={fileCount ?? 0}
+        deliveries={deliveries}
+        collaborators={collaborators}
+      />
+    </FormatProvider>
   );
 }

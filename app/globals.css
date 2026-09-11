@@ -15,6 +15,62 @@
   outline-offset: 2px;
 }
 
+html,
+body {
+  scroll-behavior: smooth;
+}
+
+/* Semantic surfaces respect the theme at the element level too (native
+   form controls, scrollbars, selection). */
+html {
+  color-scheme: light;
+}
+html.dark {
+  color-scheme: dark;
+}
+
+::selection {
+  background: theme("colors.signalSoft");
+  color: theme("colors.ink");
+}
+html.dark ::selection {
+  background: theme("colors.signalSoft");
+  color: theme("colors.inkDark");
+}
+
+/* Slim, subtle scrollbars that follow the accent color. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: theme("colors.line") transparent;
+}
+html.dark * {
+  scrollbar-color: theme("colors.lineDark") transparent;
+}
+::-webkit-scrollbar {
+  width: 9px;
+  height: 9px;
+}
+::-webkit-scrollbar-thumb {
+  background: theme("colors.line");
+  border-radius: 8px;
+}
+:::-webkit-scrollbar-thumb:hover {
+  background: theme("colors.muted");
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* Smooth theme switching — colors cross-fade instead of snapping. */
+@media (prefers-reduced-motion: no-preference) {
+  body,
+  body * {
+    transition:
+      background-color 160ms ease,
+      border-color 160ms ease;
+  }
+}
+
 /* Toast enter/exit animations (used by components/Toast.tsx). */
 @keyframes toast-in {
   from {
@@ -44,4 +100,18 @@
 
 .toast-out {
   animation: toast-out 160ms ease-in both;
+}
+
+/* Soft pulse used by the "new responses" unread dot. */
+@keyframes nibble-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+.nibble-pulse {
+  animation: nibble-pulse 1.6s ease-in-out infinite;
 }

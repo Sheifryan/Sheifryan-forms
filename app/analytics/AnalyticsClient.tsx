@@ -6,11 +6,13 @@ import { Sparkles, Loader2, Brain } from "lucide-react";
 import type { FormSchema } from "@/lib/schema";
 import type { AnalysisResult } from "@/lib/ai/contracts";
 import { useToast } from "@/components/Toast";
+import { useFormat } from "@/components/FormatProvider";
 
 interface FormRow {
   id: string;
   title: string;
   schema: FormSchema | null;
+  views?: number | null;
 }
 interface ResponseRow {
   id: string;
@@ -35,28 +37,39 @@ export function AnalyticsClient({
   responses,
   analysis,
   newerAvailable,
+  members = [],
+  memberFilter = null,
+  orgMode = false,
 }: {
   forms: FormRow[];
   activeFormId: string | null;
   responses: ResponseRow[];
   analysis: AiAnalysisView | null;
   newerAvailable: boolean;
+  members?: { userId: string; name: string | null; email: string | null }[];
+  memberFilter?: string | null;
+  orgMode?: boolean;
 }) {
   const router = useRouter();
   const toast = useToast();
+  const { formatDateTime, weekdayIndex } = useFormat();
   const [analyzing, setAnalyzing] = useState(false);
   const activeForm = forms.find((f) => f.id === activeFormId) || null;
   const fields = activeForm?.schema?.fields ?? [];
   const total = responses.length;
+  const views = activeForm?.views ?? 0;
+  const completionRate = views > 0 ? Math.round((total / views) * 100) : total > 0 ? 100 : 0;
 
   const counts = useMemo(() => {
     const c = Array(7).fill(0);
     responses.forEach((r) => {
-      const d = (new Date(r.created_at).getDay() + 6) % 7;
-      c[d]++;
+      // Bucketed in the profile timezone, not the runtime one — getDay() gave
+      // the server and the browser different answers for the same response.
+      const d = weekdayIndex(r.created_at);
+      if (d >= 0) c[d]++;
     });
     return c;
-  }, [responses]);
+  }, [responses, weekdayIndex]);
   const max = Math.max(1, ...counts);
 
   async function runAnalysis() {
@@ -85,38 +98,61 @@ export function AnalyticsClient({
 
   return (
     <div className="p-7">
-      <div className="mb-5 flex items-center gap-2 font-body text-xs text-muted">
-        <span className="font-semibold text-ink">Form:</span>
-        <select
-          value={activeFormId ?? ""}
-          onChange={(e) => router.push(`/analytics?form=${e.target.value}`)}
-          className="rounded-md border border-line bg-white px-2.5 py-1.5 font-body text-xs font-medium text-ink outline-none focus:border-signal"
-        >
-          {forms.length === 0 && <option value="">No forms yet</option>}
-          {forms.map((f) => (
-            <option key={f.id} value={f.id}>
-              {f.title}
-            </option>
-          ))}
-        </select>
+      <div className="mb-5 flex flex-wrap items-center gap-3 font-body text-xs text-muted">
+        <div className="flex items-center gap-2">
+          <span className="font-semibold text-ink">Form:</span>
+          <select
+            value={activeFormId ?? ""}
+            onChange={(e) => router.push(`/analytics?form=${e.target.value}${memberFilter ? `&member=${memberFilter}` : ""}`)}
+            className="rounded-md border border-line bg-white px-2.5 py-1.5 font-body text-xs font-medium text-ink outline-none focus:border-signal dark:border-lineDark dark:bg-panelDark dark:text-inkDark"
+          >
+            {forms.length === 0 && <option value="">No forms yet</option>}
+            {forms.map((f) => (
+              <option key={f.id} value={f.id}>
+                {f.title}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {orgMode && members.length > 0 && (
+          <div className="flex items-center gap-2">
+            <span className="font-semibold text-ink">Member:</span>
+            <select
+              value={memberFilter ?? ""}
+              onChange={(e) => {
+                const params = new URLSearchParams();
+                if (activeFormId) params.set("form", activeFormId);
+                if (e.target.value) params.set("member", e.target.value);
+                router.push(`/analytics?${params.toString()}`);
+              }}
+              className="rounded-md border border-line bg-white px-2.5 py-1.5 font-body text-xs font-medium text-ink outline-none focus:border-signal dark:border-lineDark dark:bg-panelDark dark:text-inkDark"
+            >
+              <option value="">Everyone</option>
+              {members.map((m) => (
+                <option key={m.userId} value={m.userId}>
+                  {m.name || m.email || "Member"}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
       </div>
 
       {forms.length === 0 ? (
-        <p className="font-body text-xs text-muted">Create a form first from the dashboard.</p>
+        <p className="font-body text-xs text-muted">
+          {memberFilter ? "This member hasn't created any forms yet." : "Create a form first from the dashboard."}
+        </p>
       ) : (
         <>
-          <div className="mb-5 grid grid-cols-4 gap-3.5">
+          <div className="mb-5 grid grid-cols-2 gap-3.5 lg:grid-cols-4">
             <Kpi label="Total submissions" val={total} delta={total > 0 ? "live" : "waiting for data"} />
-            <Kpi
-              label="Fields on form"
-              val={fields.length}
-              delta={`${fields.filter((f) => f.required).length} required`}
-            />
-            <Kpi label="Field types used" val={new Set(fields.map((f) => f.type)).size} delta="of 14 available" />
+            <Kpi label="Total views" val={views} delta={views > 0 ? `${completionRate}% completion rate` : "no views yet"} />
+            <Kpi label="Completion rate" val={completionRate} suffix="%" delta="submissions ÷ views" />
             <Kpi
               label="Conditional fields"
               val={fields.filter((f) => f.showIf && f.showIf.length > 0).length}
-              delta="using logic"
+              delta={`${fields.length} fields total`}
             />
           </div>
 
@@ -224,7 +260,7 @@ export function AnalyticsClient({
 
                   <p className="mt-4 border-t border-line pt-3 font-body text-[10.5px] text-muted">
                     Analyzed {analysis.responsesAnalyzed} response{analysis.responsesAnalyzed === 1 ? "" : "s"}
-                    {analysis.model ? ` · ${analysis.model}` : ""} · {new Date(analysis.createdAt).toLocaleString()}
+                    {analysis.model ? ` · ${analysis.model}` : ""} · {formatDateTime(analysis.createdAt)}
                   </p>
                 </>
               )}
@@ -280,11 +316,14 @@ export function AnalyticsClient({
   );
 }
 
-function Kpi({ label, val, delta }: { label: string; val: number; delta: string }) {
+function Kpi({ label, val, delta, suffix = "" }: { label: string; val: number; delta: string; suffix?: string }) {
   return (
-    <div className="rounded-xl border border-line bg-white p-4 shadow-sm">
-      <p className="mb-1.5 font-body text-[11.5px] font-semibold text-stone-500">{label}</p>
-      <p className="font-display text-2xl font-bold text-ink">{val}</p>
+    <div className="rounded-xl border border-line bg-white p-4 shadow-sm dark:border-lineDark dark:bg-panelDark">
+      <p className="mb-1.5 font-body text-[11.5px] font-semibold text-slate-500 dark:text-mutedDark">{label}</p>
+      <p className="font-display text-2xl font-bold text-ink dark:text-inkDark">
+        {val}
+        {suffix}
+      </p>
       <p className="mt-1 font-body text-[11px] font-semibold text-signal">{delta}</p>
     </div>
   );

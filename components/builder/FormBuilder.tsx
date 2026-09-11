@@ -53,6 +53,7 @@ import {
   HardDrive,
   Plug,
   Code2,
+  Users,
 } from "lucide-react";
 import QRCode from "qrcode";
 import {
@@ -73,6 +74,7 @@ import {
 import { FieldEditor } from "./FieldEditor";
 import { IntegrationsTab } from "./IntegrationsTab";
 import { AiTab } from "./AiTab";
+import { FormCollaborators } from "./FormCollaborators";
 import { FormRenderer } from "@/components/renderer/FormRenderer";
 import { useToast } from "@/components/Toast";
 
@@ -87,6 +89,8 @@ interface Props {
   storageBytes?: number;
   fileCount?: number;
   deliveries?: WebhookDelivery[];
+  /** Per-form collaborators (form_members, 0013) shown as an avatar stack. */
+  collaborators?: { userId: string; name: string | null; email: string | null; avatarUrl: string | null }[];
 }
 
 const TYPE_ICONS: Record<FieldType, typeof Type> = {
@@ -115,6 +119,7 @@ const TABS = [
   { id: "integrations", label: "Integrations", icon: Plug },
   { id: "themes", label: "Themes", icon: Palette },
   { id: "ai", label: "AI", icon: Sparkles },
+  { id: "collaborate", label: "Collaborators", icon: Users },
   { id: "share", label: "Share", icon: Share2 },
 ] as const;
 type TabId = (typeof TABS)[number]["id"];
@@ -167,6 +172,7 @@ export function FormBuilder({
   storageBytes = 0,
   fileCount = 0,
   deliveries = [],
+  collaborators = [],
 }: Props) {
   const [title, setTitle] = useState(initialTitle);
   const [description, setDescription] = useState(initialDescription ?? "");
@@ -406,6 +412,32 @@ export function FormBuilder({
           )}
         </div>
         <div className="flex items-center gap-3">
+          {collaborators.length > 0 && (
+            <div className="flex items-center" title={`${collaborators.length} collaborator${collaborators.length === 1 ? "" : "s"}`}>
+              {collaborators.slice(0, 4).map((c, i) => {
+                const label = c.name || c.email || "Member";
+                return (
+                  <span
+                    key={c.userId}
+                    title={label}
+                    className={`flex h-7 w-7 items-center justify-center overflow-hidden rounded-full border-2 border-white bg-gradient-to-br from-signal to-accent2 font-body text-[10px] font-bold text-white ${i > 0 ? "-ml-2" : ""}`}
+                  >
+                    {c.avatarUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={c.avatarUrl} alt={label} className="h-full w-full object-cover" />
+                    ) : (
+                      label[0]?.toUpperCase() ?? "?"
+                    )}
+                  </span>
+                );
+              })}
+              {collaborators.length > 4 && (
+                <span className="-ml-2 flex h-7 w-7 items-center justify-center rounded-full border-2 border-white bg-paper font-body text-[10px] font-semibold text-slate-500">
+                  +{collaborators.length - 4}
+                </span>
+              )}
+            </div>
+          )}
           <span className="font-mono text-xs text-muted">
             {saveState === "saving" ? "Saving…" : saveState === "saved" ? "Saved" : ""}
           </span>
@@ -529,6 +561,8 @@ export function FormBuilder({
           onApplyFields={setFields}
         />
       )}
+
+      {tab === "collaborate" && <FormCollaborators formId={formId} />}
 
       {tab === "share" && <ShareTab formId={formId} title={title} />}
     </div>

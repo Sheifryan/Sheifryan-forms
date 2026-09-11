@@ -24,6 +24,11 @@ export default async function PublicFormPage({ params }: { params: { id: string 
 
   if (!form || form.status !== "published") notFound();
 
+  // Async fire-and-forget: increment the public view counter for analytics.
+  // The RPC is security definer, so anon callers are allowed without any RLS
+  // grant on the forms table. Failures are non-fatal and swallowed.
+  Promise.resolve(supabase.rpc("bump_form_views", { p_form_id: params.id })).catch(() => undefined);
+
   const settings = form.settings as FormSettings;
   const themeKey = (form.theme as ThemeKey) ?? DEFAULT_THEME;
   const accent = THEMES[themeKey]?.hex ?? THEMES[DEFAULT_THEME].hex;

@@ -42,13 +42,39 @@ via **Terminal → Run Task**.
    ```
 
 2. **Create a Supabase project** at supabase.com, then run the migrations
-   in order:
+   **in order**:
    - Open the SQL editor in your Supabase dashboard
-   - Run `supabase/migrations/0001_init.sql`
-   - Run `supabase/migrations/0002_theme_and_settings.sql`
-   - Run `supabase/migrations/0003_password_and_notify.sql`
-   - Run `supabase/migrations/0004_folders.sql`
+   - Run every file from `supabase/migrations/0001_init.sql` through
+     `supabase/migrations/0016_org_preferences.sql`, in numeric order
    - (Or, if you use the Supabase CLI: `supabase db push`)
+
+   Every migration is idempotent (`if not exists` / `create or replace`), so
+   re-running any of them is safe.
+
+   Run `supabase/preflight.sql` first (read-only) to see which files your
+   database already has — it lists every migration with `applied = true|false`.
+
+   **Order matters.** Later files add columns and policies to tables that
+   earlier ones create — `0012_org_workspaces.sql` writes policies on
+   `folders` (0004), `form_files` (0006), `webhook_deliveries` (0007),
+   `payments` (0008), `form_analyses` (0009) and `form_ask_cache` (0010), and
+   `0013_org_collaboration.sql` alters `form_files` (0006). Both guard those
+   against missing tables and print a
+   `NOTICE: skipped … on missing table public.x` instead of aborting, but the
+   clean path is to run everything from 0001 up.
+
+   To check how far a database has actually got, run:
+   ```sql
+   select
+     to_regclass('public.workspaces')         is not null as workspaces,
+     to_regclass('public.folders')            is not null as folders,
+     to_regclass('public.form_files')         is not null as form_files,
+     to_regclass('public.webhook_deliveries') is not null as webhook_deliveries,
+     to_regclass('public.payments')           is not null as payments,
+     to_regclass('public.form_analyses')      is not null as form_analyses,
+     to_regclass('public.form_ask_cache')     is not null as form_ask_cache,
+     to_regclass('public.workflows')          is not null as workflows;
+   ```
 
 3. **Enable email auth** in Supabase → Authentication → Providers (Email is
    on by default). For the fastest, Zoho-style sign-up experience — where a

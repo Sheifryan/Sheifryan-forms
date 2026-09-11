@@ -6,6 +6,7 @@ import { Search, Download, MoreVertical, Inbox, ArrowLeft, Paperclip, Sparkles }
 import { formatBytes, formatUgx, paymentAnswerSummary, PAYMENT_STATUS_LABELS } from "@/lib/schema";
 import type { FormField, FormSchema, PaymentAnswer, PaymentStatus, UploadedFileRef } from "@/lib/schema";
 import { AiAnalysisPanel } from "@/components/ai-analysis/AiAnalysisPanel";
+import { useFormat } from "@/components/FormatProvider";
 
 interface FormRow {
   id: string;
@@ -68,6 +69,7 @@ export function SubmissionsClient({
   responses: ResponseRow[];
 }) {
   const router = useRouter();
+  const { formatDateTime, formatTime } = useFormat();
   const [query, setQuery] = useState("");
   const [openId, setOpenId] = useState<string | null>(null);
   const [view, setView] = useState<"responses" | "ai">("responses");
@@ -217,7 +219,7 @@ export function SubmissionsClient({
                 <ArrowLeft size={13} /> Back to submissions
               </button>
               <p className="mb-4 font-mono text-[11px] font-semibold uppercase tracking-wide text-muted">
-                Submitted {new Date(openResponse.created_at).toLocaleString()}
+                Submitted {formatDateTime(openResponse.created_at)}
               </p>
               <div className="divide-y divide-line">
                 {fields.map((f) => (
@@ -273,7 +275,7 @@ export function SubmissionsClient({
                       onClick={() => setOpenId(r.id)}
                       className="cursor-pointer border-b border-line last:border-0 hover:bg-paper"
                     >
-                      <td className="px-4 py-3 text-muted">{new Date(r.created_at).toLocaleTimeString()}</td>
+                      <td className="px-4 py-3 text-muted">{formatTime(r.created_at)}</td>
                       {fields.slice(0, 4).map((f) => (
                         <td key={f.id} className="px-4 py-3 text-ink">
                           {answerDisplay(f, r.answers[f.id])}

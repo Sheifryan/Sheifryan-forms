@@ -1,16 +1,40 @@
-import Link from "next/link";
-import { ClipboardList, Home, Inbox, BarChart3, Files } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
-import { FoldersSidebar } from "./FoldersSidebar";
+import { resolveActiveWorkspace, resolveWorkspaces, resolveProfile, workspaceSchemaReady, isOrganisation } from "@/lib/workspace-server";
+import { AppSidebar } from "./AppSidebar";
 import { AppHeader } from "./AppHeader";
+import { FormatProvider } from "./FormatProvider";
+
+export interface ShellUser {
+  email?: string | null;
+  fullName?: string | null;
+}
+
+export interface ShellWorkspace {
+  name?: string | null;
+  plan?: string | null;
+}
 
 interface Props {
-  active: "dashboard" | "forms" | "submissions" | "analytics" | "settings";
+  active:
+    | "dashboard"
+    | "forms"
+    | "submissions"
+    | "responses"
+    | "analytics"
+    | "files"
+    | "workflows"
+    | "wallet"
+    | "settings"
+    | "members"
+    | "activity"
+    | "onboarding";
   /** Header title for the page. */
   title: string;
   /** When true, the header shows a time-based greeting instead of `title`. */
   greeting?: boolean;
-  userEmail?: string | null;
+  /** Name/email shown in the shell and header ("David" / david@x.com). */
+  user?: ShellUser;
+  workspace?: ShellWorkspace;
   /** Active folder view for the sidebar highlight ("all" | "none" | folder id). */
   activeFolderId?: string;
   /** Per-folder form counts — the dashboard passes these for the count badges. */
@@ -18,64 +42,65 @@ interface Props {
   children: React.ReactNode;
 }
 
-const NAV = [
-  { id: "dashboard", label: "Home", href: "/dashboard", icon: Home },
-  { id: "forms", label: "All forms", href: "/forms", icon: Files },
-  { id: "submissions", label: "Submissions", href: "/submissions", icon: Inbox },
-  { id: "analytics", label: "Analytics", href: "/analytics", icon: BarChart3 },
-] as const;
-
 export async function AppShell({
   active,
   title,
   greeting = false,
-  userEmail,
+  user,
+  workspace,
   activeFolderId = "all",
   folderCounts,
   children,
 }: Props) {
   const supabase = createClient();
-  const { data: folders } = await supabase
-    .from("folders")
-    .select("id, name")
-    .order("created_at", { ascending: true });
+  const { data: folders } = await supabase.from("folders").select("id, name").order("created_at", { ascending: true });
+
+  // The shell owns workspace context, so individual pages don't have to thread
+  // it through. Both calls tolerate an un-migrated database.
+  const [{ workspace: activeWs }, workspaceList, { profile }, orgSchemaReady] = await Promise.all([
+    resolveActiveWorkspace(),
+    resolveWorkspaces(),
+    resolveProfile(),
+    workspaceSchemaReady(),
+  ]);
+  const orgMode = isOrganisation(activeWs);
+  const activePlan = activeWs?.plan ?? workspace?.plan;
+  const activeName = activeWs?.name ?? workspace?.name;
+
+  // Formatting context for every client component in the tree. Sourced from the
+  // profile (never the runtime) so the server render and the client hydration
+  // produce identical strings — see lib/format.ts for why that matters.
+  const prefs = profile?.preferences ?? {};
 
   return (
-    <div className="flex min-h-screen bg-paper">
-      <aside className="flex w-56 shrink-0 flex-col border-r border-line bg-white px-3 py-4">
-        <Link href="/dashboard" className="mb-5 flex items-center gap-2 px-2">
-          <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-signal text-white">
-            <ClipboardList size={15} />
-          </div>
-          <span className="font-display text-[15px] font-bold text-ink">
-            Easy<span className="text-signal">Form</span>
-          </span>
-        </Link>
-
-        <nav className="space-y-0.5">
-          {NAV.map((n) => (
-            <Link
-              key={n.id}
-              href={n.href}
-              className={`flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-left font-body text-[13px] font-medium transition ${
-                active === n.id ? "bg-signalSoft text-signal" : "text-stone-500 hover:bg-paper hover:text-ink"
-              }`}
-            >
-              <n.icon size={15} className={active === n.id ? "text-signal" : "text-muted"} />
-              {n.label}
-            </Link>
-          ))}
-        </nav>
-
-        <div className="mt-4 min-h-0 flex-1 overflow-y-auto border-t border-line pt-4 pb-2">
-          <FoldersSidebar folders={folders ?? []} activeFolderId={activeFolderId} counts={folderCounts} />
+    <FormatProvider locale={prefs.language ?? null} timeZone={prefs.timezone ?? null}>
+      <div className="min-h-screen bg-paper text-ink dark:bg-night dark:text-inkDark">
+        <AppSidebar
+          active={active}
+          folders={folders ?? []}
+          activeFolderId={activeFolderId}
+          counts={folderCounts}
+          userName={user?.fullName}
+          userEmail={user?.email}
+          plan={activePlan}
+          workspaceName={activeName}
+          workspaces={workspaceList.map((w) => ({ id: w.id, name: w.name, kind: w.kind, plan: w.plan, role: w.role, logo_url: w.logo_url }))}
+          activeWorkspaceId={activeWs?.id ?? null}
+          isOrganisation={orgMode}
+          orgSchemaReady={orgSchemaReady}
+        />
+        <div className="min-w-0 flex-1 lg:pl-64">
+          <AppHeader
+            title={title}
+            greeting={greeting}
+            userName={user?.fullName}
+            userEmail={user?.email}
+            plan={activePlan}
+            workspaceKind={activeWs?.kind ?? null}
+          />
+          {children}
         </div>
-      </aside>
-
-      <div className="min-w-0 flex-1">
-        <AppHeader title={title} greeting={greeting} userEmail={userEmail} />
-        {children}
       </div>
-    </div>
+    </FormatProvider>
   );
 }

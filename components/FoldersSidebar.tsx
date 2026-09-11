@@ -117,10 +117,10 @@ export function FoldersSidebar({ folders, activeFolderId, counts }: Props) {
   return (
     <div>
       <div className="mb-2 flex items-center justify-between px-1">
-        <h3 className="font-mono text-[11px] font-bold uppercase tracking-wide text-muted">Folders</h3>
+        <h3 className="font-mono text-[11px] font-bold uppercase tracking-wide text-muted dark:text-mutedDark">Folders</h3>
         <button
           onClick={() => setNewOpen((v) => !v)}
-          className="rounded p-1 text-muted transition hover:bg-paper hover:text-ink"
+          className="rounded p-1 text-muted transition hover:bg-paper hover:text-ink dark:text-mutedDark dark:hover:bg-panelDark dark:hover:text-inkDark"
         >
           <FolderPlus size={14} />
         </button>
@@ -133,7 +133,7 @@ export function FoldersSidebar({ folders, activeFolderId, counts }: Props) {
             value={newName}
             onChange={(e) => setNewName(e.target.value)}
             placeholder="Folder name"
-            className="w-full rounded-md border border-line bg-white px-2 py-1.5 font-body text-xs outline-none focus:border-signal"
+            className="w-full rounded-md border border-line bg-white px-2 py-1.5 font-body text-xs outline-none focus:border-signal dark:border-lineDark dark:bg-panelDark dark:text-inkDark"
           />
         </form>
       )}
@@ -185,7 +185,7 @@ export function FoldersSidebar({ folders, activeFolderId, counts }: Props) {
           />
         ))}
       </div>
-      <p className="mt-3 px-1 font-body text-[10.5px] leading-snug text-muted">
+      <p className="mt-3 px-1 font-body text-[10.5px] leading-snug text-muted dark:text-mutedDark">
         Drag a form card onto a folder to move it. Hover a folder and hit “+” to start a new form inside it.
       </p>
     </div>
@@ -247,10 +247,10 @@ function FolderRow({
       onClick={onClick}
       className={`group flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-left font-body text-xs transition ${
         active
-          ? "bg-signalSoft font-semibold text-signal"
+          ? "bg-signalSoft/25 font-semibold text-signal"
           : isDropTarget
-            ? "bg-signalSoft/60 text-signal"
-            : "text-stone-600 hover:bg-paper"
+            ? "bg-signalSoft/50 text-signal"
+            : "text-slate-600 hover:bg-paper dark:text-mutedDark dark:hover:bg-panelDark"
       }`}
     >
       <Icon size={13} className={active ? "text-signal" : "text-muted"} />

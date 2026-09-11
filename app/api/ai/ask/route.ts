@@ -62,9 +62,9 @@ export async function POST(request: Request) {
     .from("forms")
     .select("id, owner_id, title, description, schema, schema_version")
     .eq("id", formId)
-    .eq("owner_id", user.id)
+    
     .single();
-  if (!form || form.owner_id !== user.id) {
+  if (!form) {
     return NextResponse.json({ error: "Form not found" }, { status: 404 });
   }
 

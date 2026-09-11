@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { AppShell } from "@/components/AppShell";
+import { resolveActiveWorkspace, resolveProfile } from "@/lib/workspace-server";
 import { AllFormsClient } from "./AllFormsClient";
 
 export default async function AllFormsPage({ searchParams }: { searchParams: { folder?: string } }) {
@@ -10,11 +11,17 @@ export default async function AllFormsPage({ searchParams }: { searchParams: { f
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  const { data: forms } = await supabase
+  const { workspace } = await resolveActiveWorkspace();
+  const { profile } = await resolveProfile();
+
+  // Scope to the ACTIVE workspace (personal or organisation). RLS enforces
+  // membership, so the owner filter is no longer needed.
+  let query = supabase
     .from("forms")
-    .select("id, title, status, schema, theme, folder_id, updated_at")
-    .eq("owner_id", user.id)
+    .select("id, title, status, schema, theme, folder_id, created_at, updated_at")
     .order("updated_at", { ascending: false });
+  if (workspace) query = query.eq("workspace_id", workspace.id);
+  const { data: forms } = await query;
 
   const { data: folders } = await supabase.from("folders").select("id, name").order("created_at", { ascending: true });
 
@@ -51,7 +58,8 @@ export default async function AllFormsPage({ searchParams }: { searchParams: { f
     <AppShell
       active="forms"
       title={headingTitle}
-      userEmail={user.email}
+      user={{ email: user.email, fullName: profile?.full_name || (user.user_metadata?.full_name as string) }}
+      workspace={{ name: workspace?.name, plan: workspace?.plan }}
       activeFolderId={activeFolderId}
       folderCounts={folderCounts}
     >
