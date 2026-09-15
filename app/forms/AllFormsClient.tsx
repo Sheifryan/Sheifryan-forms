@@ -81,12 +81,12 @@ export function AllFormsClient({
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ title, fields, folderId: folderForCreate }),
     });
-    const data = await res.json();
+    const data = await res.json().catch(() => ({}));
     if (data.id) {
       toast.success("Form created", { description: `"${title}" is ready to build.` });
       router.push(`/builder/${data.id}`);
     } else {
-      toast.error("Couldn't create the form");
+      toast.error(data.error ?? "Couldn't create the form");
     }
     setBusy(false);
     setGalleryOpen(false);

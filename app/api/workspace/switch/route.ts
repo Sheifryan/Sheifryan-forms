@@ -18,7 +18,20 @@ export async function POST(request: Request) {
   const workspaceId = typeof body?.workspaceId === "string" ? body.workspaceId : null;
   if (!workspaceId) return NextResponse.json({ error: "workspaceId is required" }, { status: 400 });
 
-  const membership = await resolveMembership(workspaceId);
+  let membership = await resolveMembership(workspaceId);
+  if (!membership || membership.status !== "active") {
+    // The caller may own this workspace yet be missing its owner membership row
+    // (or hold an invited/suspended one) — the pre-0018 lockout. Heal once and
+    // re-check before refusing the switch. ensure_own_memberships only ever
+    // grants ownership of workspaces the caller already owns, so this can't be
+    // used to reach anyone else's data.
+    try {
+      await supabase.rpc("ensure_own_memberships");
+    } catch {
+      // pre-0017 databases have no such RPC
+    }
+    membership = await resolveMembership(workspaceId);
+  }
   if (!membership || membership.status !== "active") {
     return NextResponse.json({ error: "You don't have access to that workspace." }, { status: 403 });
   }

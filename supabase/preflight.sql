@@ -35,4 +35,5 @@ union all select '0015_org_functions.sql',       'fn create_organisation',      
 union all select '0015_org_functions.sql',       'fn accept_invitation(text)',          (to_regprocedure('public.accept_invitation(text)') is not null)
 union all select '0016_org_preferences.sql',     'column workspaces.security_settings', (exists (select 1 from information_schema.columns c where c.table_schema = 'public' and c.table_name = 'workspaces' and c.column_name = 'security_settings'))
 union all select '0017_owner_membership_repair.sql', 'fn ensure_own_memberships()',     (to_regprocedure('public.ensure_own_memberships()') is not null)
+union all select '0018_personal_workspace_repair.sql', 'fn owns_workspace(uuid)',        (to_regprocedure('public.owns_workspace(uuid)') is not null)
 order by migration, signature;

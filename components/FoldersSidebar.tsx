@@ -60,13 +60,13 @@ export function FoldersSidebar({ folders, activeFolderId, counts }: Props) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ title: "Untitled form", folderId }),
     });
-    const data = await res.json();
+    const data = await res.json().catch(() => ({}));
     if (data.id) {
       const folderName = items.find((i) => i.id === folderId)?.name ?? "folder";
       toast.success("Form created", { description: `Added to “${folderName}”.` });
       router.push(`/builder/${data.id}`);
     } else {
-      toast.error("Couldn't create the form");
+      toast.error(data.error ?? "Couldn't create the form");
     }
   }
 

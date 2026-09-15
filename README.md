@@ -45,7 +45,7 @@ via **Terminal → Run Task**.
    **in order**:
    - Open the SQL editor in your Supabase dashboard
    - Run every file from `supabase/migrations/0001_init.sql` through
-     `supabase/migrations/0016_org_preferences.sql`, in numeric order
+     `supabase/migrations/0018_personal_workspace_repair.sql`, in numeric order
    - (Or, if you use the Supabase CLI: `supabase db push`)
 
    Every migration is idempotent (`if not exists` / `create or replace`), so

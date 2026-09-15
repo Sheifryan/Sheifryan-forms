@@ -74,12 +74,12 @@ export function OnboardingClient({
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ title: "Untitled form" }),
     });
-    const data = await res.json();
+    const data = await res.json().catch(() => ({}));
     if (data.id) {
       await finish();
       router.push(`/builder/${data.id}`);
     } else {
-      toast.error("Couldn't create the form, try again.");
+      toast.error(data.error ?? "Couldn't create the form, try again.");
     }
   }
 

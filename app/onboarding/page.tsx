@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { resolveWorkspace } from "@/lib/workspace-server";
+import { resolveActiveWorkspace } from "@/lib/workspace-server";
 import { firstName } from "@/lib/workspace";
 import { OnboardingClient } from "./OnboardingClient";
 
@@ -15,10 +15,12 @@ export default async function OnboardingPage({
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  const { workspace, available } = await resolveWorkspace();
+  // Onboarding is scoped to the workspace the user is currently in — the
+  // dashboard shows that same workspace's onboarded_at, so both must agree.
+  const { workspace, available } = await resolveActiveWorkspace();
 
-  // A fully onboarded user has no reason to go through the flow again — send
-  // them home (they can reach onboarding from the dashboard banner anytime).
+  // A fully onboarded workspace has no reason to go through the flow again —
+  // send them home (they can reach onboarding from the dashboard banner anytime).
   if (available && workspace?.onboarded_at) redirect("/dashboard");
 
   const suggested = `${firstName((user.user_metadata?.full_name as string) ?? "") || "My"}'s Workspace`;

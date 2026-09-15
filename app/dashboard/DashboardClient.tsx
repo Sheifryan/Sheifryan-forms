@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ClipboardList, Copy, Eye, Folder, Inbox, LayoutTemplate, MoreVertical, Pencil, Plus, Send, Sparkles, Trash2, TrendingUp, Users, Wallet, X } from "lucide-react";
 import { THEMES, DEFAULT_THEME, type ThemeKey, type FormField } from "@/lib/schema";
 import { TEMPLATES, type FormTemplate } from "@/lib/templates";
@@ -89,14 +89,21 @@ export function DashboardClient({
   const [aiOpen, setAiOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<FormRow | null>(null);
 
+  // `?onboarded=1` is a one-shot success flag. Clear it from the URL so the
+  // "You're all set up" banner can't reappear on a later reload (the persistent
+  // "Finish setting up" banner is driven by workspaces.onboarded_at).
+  useEffect(() => {
+    if (justOnboarded) router.replace("/dashboard", { scroll: false });
+  }, [justOnboarded, router]);
+
   async function createForm(title: string, fields: FormField[] = []) {
     setBusy(true);
     const res = await fetch("/api/forms", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ title, fields }) });
-    const data = await res.json();
+    const data = await res.json().catch(() => ({}));
     if (data.id) {
       toast.success("Form created", { description: `"${title}" is ready to build.` });
       router.push(`/builder/${data.id}`);
-    } else toast.error("Couldn't create the form");
+    } else toast.error(data.error ?? "Couldn't create the form");
     setBusy(false);
     setGalleryOpen(false);
   }

@@ -108,6 +108,10 @@ export async function resolveWorkspace(): Promise<{ workspace: WorkspaceRow | nu
     .from("workspaces")
     .insert({
       owner_id: user.id,
+      // created_by is required by 0012's `users create own workspaces` check
+      // (owner_id = auth.uid() and created_by = auth.uid()). Without it this
+      // insert could never succeed and provisioning relied purely on a heal.
+      created_by: user.id,
       name,
       kind: "personal",
       plan: "free",
@@ -144,18 +148,23 @@ export async function resolveWorkspace(): Promise<{ workspace: WorkspaceRow | nu
 }
 
 /**
- * Best-effort repair of missing owner membership rows (migration 0017).
+ * Best-effort repair of an owner membership row that is missing or not active
+ * (migrations 0017 + 0018).
  *
  * Deliberately tolerant: on a database where 0017 hasn't been applied the RPC
  * doesn't exist, so this returns an error which we swallow — the caller still
  * resolves whatever it could, exactly as before. Never allowed to block
  * workspace resolution.
  */
-async function healOwnMemberships(supabase: ReturnType<typeof createClient>): Promise<void> {
+export async function healOwnMemberships(supabase: ReturnType<typeof createClient>): Promise<void> {
   try {
-    await supabase.rpc("ensure_own_memberships");
+    // `.rpc()` RESOLVES with an `{ error }` instead of throwing, so a bare
+    // try/catch silently ignored a missing RPC (pre-0017 databases) and left the
+    // workspace unreachable. Inspect the error explicitly.
+    const { error } = await supabase.rpc("ensure_own_memberships");
+    if (error) return; // pre-0017 DB, or the self-heal doesn't apply.
   } catch {
-    // Ignored on purpose — see the doc comment above.
+    // Network/transport failure — never blocks resolution.
   }
 }
 
@@ -287,7 +296,14 @@ export async function resolveActiveWorkspace(): Promise<ActiveWorkspace> {
   const cookieId = cookieStore.get(WORKSPACE_COOKIE)?.value ?? null;
 
   if (cookieId) {
-    const membership = await resolveMembership(cookieId);
+    let membership = await resolveMembership(cookieId);
+    // The cookie names a workspace we can't currently access. That is expected
+    // when the caller owns it but its owner membership row is missing or not
+    // active (the pre-0018 failure mode) — heal once, then re-check.
+    if (!membership || membership.status !== "active") {
+      await healOwnMemberships(supabase);
+      membership = await resolveMembership(cookieId);
+    }
     if (membership && membership.status === "active") {
       const { data, error } = await supabase
         .from("workspaces")
@@ -304,8 +320,14 @@ export async function resolveActiveWorkspace(): Promise<ActiveWorkspace> {
   // pre-migration user).
   const personal = await resolveWorkspace();
   if (personal.workspace) {
-    const membership = await resolveMembership(personal.workspace.id);
-    return { workspace: personal.workspace, membership, available: personal.available };
+    let membership = await resolveMembership(personal.workspace.id);
+    // A missing row, or one that is 'invited'/'suspended', is the same lockout:
+    // self-heal and re-read before handing the workspace back.
+    if (!membership || membership.status !== "active") {
+      await healOwnMemberships(supabase);
+      membership = await resolveMembership(personal.workspace.id);
+    }
+    return { workspace: personal.workspace, membership: membership ?? null, available: personal.available };
   }
 
   return { workspace: null, membership: null, available: personal.available };

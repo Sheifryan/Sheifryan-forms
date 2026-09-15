@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { resolveActiveWorkspace } from "@/lib/workspace-server";
 import { planById } from "@/lib/plans";
 
 // Current personal workspace + profile. GET returns the pair; PATCH updates
@@ -50,13 +51,35 @@ export async function PATCH(request: Request) {
     update.onboarded_at = new Date().toISOString();
   }
 
-  const { data, error } = await supabase
-    .from("workspaces")
-    .update(update)
-    .eq("owner_id", user.id)
-    .eq("kind", "personal")
-    .select("id, name, kind, plan, credits_balance, storage_quota_bytes, onboarded_at, created_at")
-    .single();
+  // Onboarding must complete for the workspace the user is actually in. The
+  // dashboard banner is driven by THAT workspace's onboarded_at, so writing only
+  // the personal workspace (the old behaviour) left the banner stuck forever
+  // inside an organisation, with no way to dismiss it. Fall back to the personal
+  // workspace when nothing is resolved (pre-migration databases).
+  const { workspace: activeWs } = await resolveActiveWorkspace();
+  const targetId = activeWs?.id ?? null;
+
+  const applyUpdate = () => {
+    const q = supabase
+      .from("workspaces")
+      .update(update)
+      .select("id, name, kind, plan, credits_balance, storage_quota_bytes, onboarded_at, created_at");
+    return (targetId ? q.eq("id", targetId) : q.eq("owner_id", user.id).eq("kind", "personal")).single();
+  };
+
+  let { data, error } = await applyUpdate();
+
+  // RLS rejects the update when the caller's owner membership row is missing or
+  // inactive (the pre-0018 lockout), which is why "complete onboarding" used to
+  // look like it saved and then reappear. Self-heal once, then retry.
+  if (error) {
+    try {
+      await supabase.rpc("ensure_own_memberships");
+    } catch {
+      // pre-0017 databases have no such RPC
+    }
+    ({ data, error } = await applyUpdate());
+  }
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ workspace: data });
