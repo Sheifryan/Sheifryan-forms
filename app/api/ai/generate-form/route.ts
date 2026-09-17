@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { aiConfigured, aiRateLimited, completeJSON } from "@/lib/ai/client";
 import { buildGenerationPrompt } from "@/lib/ai/prompts";
 import { formDraftSchema, normalizeFormDraft, type FormDraftOutput } from "@/lib/ai/contracts";
+import { aiErrorMessage } from "@/lib/ai/errors";
 
 export async function POST(request: Request) {
   const supabase = createClient();
@@ -36,7 +37,7 @@ export async function POST(request: Request) {
     return NextResponse.json(normalizeFormDraft(raw));
   } catch (err) {
     console.error("[ai/generate-form]", err);
-    const message = err instanceof Error ? err.message : "The AI couldn't build a form. Try again.";
+    const message = aiErrorMessage(err, "The AI couldn't build a form. Try again.");
     return NextResponse.json({ error: message }, { status: 502 });
   }
 }

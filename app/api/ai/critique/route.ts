@@ -2,7 +2,9 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { aiConfigured, aiRateLimited, completeJSON } from "@/lib/ai/client";
 import { buildCritiquePrompt, type EditableFormShape } from "@/lib/ai/prompts";
+import { canAnalyseForm } from "@/lib/ai/analysis/access";
 import { critiqueSchema, type CritiqueResult } from "@/lib/ai/contracts";
+import { aiErrorMessage } from "@/lib/ai/errors";
 import type { FormField, FormSchema } from "@/lib/schema";
 
 /**
@@ -32,11 +34,10 @@ export async function POST(request: Request) {
 
   const { data: form } = await supabase
     .from("forms")
-    .select("id, owner_id, title, description, schema")
+    .select("id, owner_id, workspace_id, title, description, schema")
     .eq("id", formId)
-    
     .single();
-  if (!form) {
+  if (!form || !(await canAnalyseForm(supabase, form, user.id))) {
     return NextResponse.json({ error: "Form not found" }, { status: 404 });
   }
 
@@ -69,7 +70,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ critique });
   } catch (err) {
     console.error("[ai/critique]", err);
-    const message = err instanceof Error ? err.message : "The AI review failed. Try again.";
+    const message = aiErrorMessage(err, "The AI review failed — try again.");
     return NextResponse.json({ error: message }, { status: 502 });
   }
 }

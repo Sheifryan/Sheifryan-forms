@@ -7,6 +7,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { executeQuery } from "@/lib/ai/analysis/execute";
+import { canAnalyseForm } from "@/lib/ai/analysis/access";
 import { createSupabaseResponsesSource } from "@/lib/ai/analysis/source";
 import type { FormField, FormSchema } from "@/lib/schema";
 import type { NormalizedAskQuery } from "@/lib/ai/analysis/types";
@@ -54,13 +55,14 @@ export async function POST(request: Request) {
   if (!parsed.success) return NextResponse.json({ error: "Invalid query" }, { status: 400 });
   const rawQuery = parsed.data as NormalizedAskQuery;
 
+  // Ownership gate: exporting re-runs a validated query over the same rows, so
+  // it needs the same permission check as /api/ai/ask.
   const { data: form } = await supabase
     .from("forms")
-    .select("id, owner_id, title, schema")
+    .select("id, owner_id, workspace_id, title, schema")
     .eq("id", formId)
-    
     .single();
-  if (!form) {
+  if (!form || !(await canAnalyseForm(supabase, form, user.id))) {
     return NextResponse.json({ error: "Form not found" }, { status: 404 });
   }
 

@@ -36,4 +36,8 @@ union all select '0015_org_functions.sql',       'fn accept_invitation(text)',  
 union all select '0016_org_preferences.sql',     'column workspaces.security_settings', (exists (select 1 from information_schema.columns c where c.table_schema = 'public' and c.table_name = 'workspaces' and c.column_name = 'security_settings'))
 union all select '0017_owner_membership_repair.sql', 'fn ensure_own_memberships()',     (to_regprocedure('public.ensure_own_memberships()') is not null)
 union all select '0018_personal_workspace_repair.sql', 'fn owns_workspace(uuid)',        (to_regprocedure('public.owns_workspace(uuid)') is not null)
+-- 0019 is a data repair, so it has no schema object of its own; it marks itself
+-- with a comment on forms.workspace_id. The check is catalog-only on purpose, so
+-- this file stays runnable on a database where `forms` doesn't exist yet.
+union all select '0019_backfill_forms_workspace.sql', 'comment forms.workspace_id', (exists (select 1 from pg_description d join pg_class c on c.oid = d.objoid join pg_namespace n on n.oid = c.relnamespace join pg_attribute a on a.attrelid = c.oid and a.attnum = d.objsubid where n.nspname = 'public' and c.relname = 'forms' and a.attname = 'workspace_id' and d.description like '0019:%'))
 order by migration, signature;

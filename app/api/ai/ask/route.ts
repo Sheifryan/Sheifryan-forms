@@ -10,6 +10,8 @@ import { NextResponse } from "next/server";
 import { createClient, createServiceClient } from "@/lib/supabase/server";
 import { aiConfigured, aiRateLimited, completeJSON } from "@/lib/ai/client";
 import { buildAskPrompt } from "@/lib/ai/analysis/prompts";
+import { canAnalyseForm } from "@/lib/ai/analysis/access";
+import { aiErrorMessage } from "@/lib/ai/errors";
 import { askQuerySchema, type AskQueryRaw } from "@/lib/ai/analysis/contracts";
 import { normalizeQuery } from "@/lib/ai/analysis/normalize";
 import { executeQuery } from "@/lib/ai/analysis/execute";
@@ -57,14 +59,14 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Too many AI requests — try again in a minute." }, { status: 429 });
   }
 
-  // Ownership gate: the user can only ask about their own form.
+  // Ownership gate: the caller must be allowed to read this form's responses —
+  // either it is their own form, or they hold 'responses.read' in its workspace.
   const { data: form } = await supabase
     .from("forms")
-    .select("id, owner_id, title, description, schema, schema_version")
+    .select("id, owner_id, workspace_id, title, description, schema, schema_version")
     .eq("id", formId)
-    
     .single();
-  if (!form) {
+  if (!form || !(await canAnalyseForm(supabase, form, user.id))) {
     return NextResponse.json({ error: "Form not found" }, { status: 404 });
   }
 
@@ -169,7 +171,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ answer, query, model, cached: false }, { status: 200 });
   } catch (err) {
     console.error("[ai/ask]", err);
-    const message = err instanceof Error ? err.message : "The AI couldn't answer that question. Try again.";
+    const message = aiErrorMessage(err, "The AI couldn't answer that question. Try again.");
     return NextResponse.json({ error: message }, { status: 502 });
   }
 }

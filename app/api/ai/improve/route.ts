@@ -4,6 +4,8 @@ import { createClient } from "@/lib/supabase/server";
 import { aiConfigured, aiRateLimited, completeJSON } from "@/lib/ai/client";
 import { buildCritiquePrompt, buildImprovePrompt, type EditableFormShape } from "@/lib/ai/prompts";
 import { improveSchema, normalizeGeneratedFields } from "@/lib/ai/contracts";
+import { canAnalyseForm } from "@/lib/ai/analysis/access";
+import { aiErrorMessage } from "@/lib/ai/errors";
 import type { FormField, FormSchema } from "@/lib/schema";
 
 type RawImprove = z.infer<typeof improveSchema>;
@@ -35,11 +37,10 @@ export async function POST(request: Request) {
 
   const { data: form } = await supabase
     .from("forms")
-    .select("id, owner_id, title, description, schema, settings")
+    .select("id, owner_id, workspace_id, title, description, schema, settings")
     .eq("id", formId)
-    
     .single();
-  if (!form) {
+  if (!form || !(await canAnalyseForm(supabase, form, user.id))) {
     return NextResponse.json({ error: "Form not found" }, { status: 404 });
   }
 
@@ -86,7 +87,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ summary: raw.summary, fields });
   } catch (err) {
     console.error("[ai/improve]", err);
-    const message = err instanceof Error ? err.message : "The AI improvement failed. Try again.";
+    const message = aiErrorMessage(err, "The AI couldn't improve the form — try again.");
     return NextResponse.json({ error: message }, { status: 502 });
   }
 }

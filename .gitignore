@@ -6,6 +6,8 @@ node_modules
 *.tsbuildinfo
 .DS_Store
 tests/ask-your-data/dist/
+tests/ai-contracts/dist/
+tests/ai-import/dist/
 
 __pycache__
 *.pyc

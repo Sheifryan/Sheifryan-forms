@@ -45,8 +45,13 @@ via **Terminal → Run Task**.
    **in order**:
    - Open the SQL editor in your Supabase dashboard
    - Run every file from `supabase/migrations/0001_init.sql` through
-     `supabase/migrations/0018_personal_workspace_repair.sql`, in numeric order
+     `supabase/migrations/0019_backfill_forms_workspace.sql`, in numeric order
    - (Or, if you use the Supabase CLI: `supabase db push`)
+   - (Or straight over Postgres: set `SUPABASE_DB_PASSWORD` + `DATABASE_URL` in
+     `.env.local` — see `.env.local.example` — and run
+     `PGPASSWORD="$SUPABASE_DB_PASSWORD" psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f supabase/migrations/<file>.sql`.
+     Use the pooler URL with the `postgres.<project-ref>` username: the direct
+     `db.<ref>.supabase.co` host is IPv6-only on many networks.)
 
    Every migration is idempotent (`if not exists` / `create or replace`), so
    re-running any of them is safe.
@@ -88,6 +93,16 @@ via **Terminal → Run Task**.
      Supabase → Settings → API
    - `SUPABASE_SERVICE_ROLE_KEY` — same page. **Never** expose this to the
      client; it's only read in server-only route handlers.
+   - `AI_API_KEY` / `AI_BASE_URL` / `AI_MODEL` — any OpenAI-compatible chat API
+     (the defaults target DeepSeek). These are **server-only** and power the AI
+     form builder, the **form importer** (photos/PDF/Word), the pre-publish
+     review, the Analytics "Generate insights" run and the Responses →
+     **AI Analysis** tab. Without them every AI route answers
+     `503 AI isn't configured yet` — which looks like the buttons doing
+     nothing. Note this when deploying: Vercel/Coolify read the dashboard env,
+     not a local `.env` (which is gitignored and dockerignored).
+   - `AI_VISION_MODEL` — *optional* pin for reading uploaded form images. Unset
+     means `AI_MODEL` is used (the default model reads images fine).
 
 5. **Run it**
    ```
@@ -211,6 +226,16 @@ and check **Recent deliveries** to confirm everything works end-to-end.
 - `app/dashboard/` — the **Home** page: a hero with quick-create chips and
   template gallery modal, a **Recent forms** grid (the 4 most recently updated
   forms for quick access) linking to `/forms`, workspace overview stats.
+  "Create with AI" opens a modal with two modes: **describe** a form, or
+  **upload** an existing one.
+- `app/api/ai/import-form/` + `lib/ai/import/extract.ts` — **import an existing
+  form**: photos/scans, a PDF or a Word document become real, editable fields.
+  Photos go to the vision-capable model as page images (the browser downscales
+  them first); PDFs are read with `pdfjs-dist` (falling back to their embedded
+  page JPEGs when there is no text layer, i.e. a scan) and `.docx` with
+  `mammoth`, keeping each table row as "label | answer". Uploaded bytes are
+  processed in memory and discarded — nothing is written to storage or the
+  database.
 - `app/forms/` — the **All forms** page: every form as a folder-filterable,
   drag-to-folder grid with create (scoped to the active folder when browsing
   one), delete, and drag-to-move; uses the shared template gallery modal.
@@ -218,9 +243,13 @@ and check **Recent deliveries** to confirm everything works end-to-end.
   pattern as forms. Deleting a folder doesn't delete its forms — they fall
   back to Uncategorized automatically (`on delete set null` on
   `forms.folder_id`).
-- `app/submissions/` and `app/analytics/` — real per-form data: a
+- `app/responses/` and `app/analytics/` — real per-form data: a
   searchable response table with CSV export, and KPI cards / charts
-  computed from actual response rows.
+  computed from actual response rows. `/responses` also hosts the
+  **AI Analysis** tab ("Ask your data", `/api/ai/ask`), which answers
+  plain-English questions about ONE form's submissions and can export the
+  underlying rows (`/api/ai/ask/export`). `app/submissions/` is now only a
+  redirect to `/responses`.
 - `app/f/[id]/` — the public form. Pre-checks closure conditions and the
   password gate before rendering anything, so visitors see a clear message
   instead of filling out a form that will reject them on submit.

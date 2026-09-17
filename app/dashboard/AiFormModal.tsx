@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Sparkles, Loader2, X, Wand2, RotateCcw, ArrowRight, Star } from "lucide-react";
+import { Sparkles, Loader2, X, Wand2, RotateCcw, ArrowRight, Star, Upload, FileText, Trash2, Image as ImageIcon } from "lucide-react";
 import type { FormDraft } from "@/lib/ai/contracts";
 import type { FormField } from "@/lib/schema";
 import { useToast } from "@/components/Toast";
@@ -13,6 +13,49 @@ const EXAMPLES = [
   "Job application — name, email, years of experience, portfolio link and a short cover letter",
 ];
 
+/** Keep in step with MAX_FILES / MAX_IMAGES on the server. */
+const MAX_PAGES = 6;
+/** Long edge for uploaded photos; enough to read print, far smaller to send. */
+const MAX_EDGE = 1600;
+
+function formatSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
+  return `${Math.round((bytes / (1024 * 1024)) * 10) / 10} MB`;
+}
+
+/**
+ * Shrink photos in the browser before uploading.
+ *
+ * A phone photo is several megabytes — slow to send and close to the request
+ * limit — while ~1600px on the long edge is still plenty for reading printed
+ * text. Drawing through a canvas also re-encodes to JPEG, which converts HEIC
+ * and other formats the server would otherwise have to reject, and drops EXIF
+ * metadata along the way.
+ */
+async function prepareForUpload(file: File): Promise<File> {
+  if (!file.type.startsWith("image/")) return file;
+  try {
+    const bitmap = await createImageBitmap(file);
+    const scale = Math.min(1, MAX_EDGE / Math.max(bitmap.width, bitmap.height));
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.max(1, Math.round(bitmap.width * scale));
+    canvas.height = Math.max(1, Math.round(bitmap.height * scale));
+    const context = canvas.getContext("2d");
+    if (!context) return file;
+    context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+    if (typeof bitmap.close === "function") bitmap.close();
+    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.82));
+    if (!blob) return file;
+    const name = file.name.replace(/\.[^.]+$/, "") || "page";
+    return new File([blob], `${name}.jpg`, { type: "image/jpeg" });
+  } catch {
+    // A browser that can't decode the format (e.g. HEIC outside Safari): let the
+    // server decide and explain.
+    return file;
+  }
+}
+
 export function AiFormModal({ onClose }: { onClose: () => void }) {
   const router = useRouter();
   const toast = useToast();
@@ -21,6 +64,42 @@ export function AiFormModal({ onClose }: { onClose: () => void }) {
   const [draft, setDraft] = useState<FormDraft | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [mode, setMode] = useState<"describe" | "upload">("describe");
+  const [files, setFiles] = useState<File[]>([]);
+  const [hint, setHint] = useState("");
+  const [warnings, setWarnings] = useState<string[]>([]);
+  const [dragging, setDragging] = useState(false);
+
+  function addFiles(list: FileList | null) {
+    if (!list) return;
+    const incoming = Array.from(list);
+    setFiles((current) => (current.length >= MAX_PAGES ? current : [...current, ...incoming].slice(0, MAX_PAGES)));
+    setError(null);
+  }
+
+  async function importForm() {
+    if (files.length === 0) {
+      setError("Choose a file to import first — a photo, PDF or Word document.");
+      return;
+    }
+    setError(null);
+    setPhase("loading");
+    try {
+      const body = new FormData();
+      for (const file of files) body.append("files", await prepareForUpload(file));
+      if (hint.trim()) body.append("hint", hint.trim());
+
+      const res = await fetch("/api/ai/import-form", { method: "POST", body });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error ?? "The AI couldn't read that form — try again.");
+      setDraft(data as FormDraft);
+      setWarnings(Array.isArray(data.warnings) ? (data.warnings as string[]) : []);
+      setPhase("preview");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "The AI couldn't read that form — try again.");
+      setPhase("idle");
+    }
+  }
 
   async function generate() {
     const trimmed = prompt.trim();
@@ -71,7 +150,8 @@ export function AiFormModal({ onClose }: { onClose: () => void }) {
     }
   }
 
-  const canGenerate = phase === "loading" || prompt.trim().length < 5;
+  const canGenerate =
+    phase === "loading" || (mode === "upload" ? files.length === 0 : prompt.trim().length < 5);
 
   return (
     <div
@@ -91,7 +171,7 @@ export function AiFormModal({ onClose }: { onClose: () => void }) {
             <div>
               <h3 className="font-display text-base font-semibold text-ink">Create a form with AI</h3>
               <p className="font-body text-[11.5px] text-muted">
-                Describe what you need — the AI drafts it, then you refine it in the builder.
+                Describe a form, or upload a photo, PDF or Word document of one you already have.
               </p>
             </div>
           </div>
@@ -108,35 +188,72 @@ export function AiFormModal({ onClose }: { onClose: () => void }) {
           {phase === "loading" && (
             <div className="flex flex-col items-center py-14 text-center">
               <Loader2 size={26} className="mb-3 animate-spin text-violet-600" />
-              <p className="mb-1 font-body text-sm font-semibold text-ink">Designing your form…</p>
+              <p className="mb-1 font-body text-sm font-semibold text-ink">
+                {mode === "upload" ? "Reading your form…" : "Designing your form…"}
+              </p>
               <p className="max-w-xs font-body text-xs text-muted">
-                Choosing the right questions and writing clean options for your request.
+                {mode === "upload"
+                  ? "Picking out each question and its printed options so you can edit the result."
+                  : "Choosing the right questions and writing clean options for your request."}
               </p>
             </div>
           )}
 
           {phase === "preview" && draft && (
-            <DraftPreview
-              draft={draft}
-              busy={busy}
-              onBack={() => setPhase("idle")}
-              onRegenerate={generate}
-              onUse={openInBuilder}
-            />
+            <>
+              {warnings.length > 0 && (
+                <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-3.5 py-2.5 font-body text-[11.5px] text-amber-900">
+                  <p className="font-semibold">Read with a few notes</p>
+                  <ul className="mt-1 list-disc space-y-0.5 pl-4">
+                    {warnings.map((warning) => (
+                      <li key={warning}>{warning}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              <DraftPreview
+                draft={draft}
+                busy={busy}
+                onBack={() => setPhase("idle")}
+                onRegenerate={mode === "upload" ? importForm : generate}
+                onUse={openInBuilder}
+              />
+            </>
           )}
 
           {phase !== "preview" && (
             <div>
-              <label className="mb-1.5 block font-body text-xs font-semibold text-ink">
-                What kind of form do you need?
-              </label>
-              <textarea
-                value={prompt}
-                onChange={(e) => setPrompt(e.target.value)}
-                rows={4}
-                placeholder="e.g. Event registration collecting name, email, number of guests and dietary needs…"
-                className="w-full resize-none rounded-xl border border-line bg-paper p-3.5 font-body text-sm text-ink outline-none transition focus:border-violet-500"
-              />
+              <div className="mb-4 flex items-center gap-1 rounded-lg bg-paper p-1">
+                <button
+                  onClick={() => setMode("describe")}
+                  className={`flex flex-1 items-center justify-center gap-1.5 rounded-md px-3 py-1.5 font-body text-xs font-semibold transition ${
+                    mode === "describe" ? "bg-white text-ink shadow-sm" : "text-muted hover:text-ink"
+                  }`}
+                >
+                  <Sparkles size={12} /> Describe it
+                </button>
+                <button
+                  onClick={() => setMode("upload")}
+                  className={`flex flex-1 items-center justify-center gap-1.5 rounded-md px-3 py-1.5 font-body text-xs font-semibold transition ${
+                    mode === "upload" ? "bg-white text-ink shadow-sm" : "text-muted hover:text-ink"
+                  }`}
+                >
+                  <Upload size={12} /> Upload a form
+                </button>
+              </div>
+
+              {mode === "describe" ? (
+                <div>
+                  <label className="mb-1.5 block font-body text-xs font-semibold text-ink">
+                    What kind of form do you need?
+                  </label>
+                  <textarea
+                    value={prompt}
+                    onChange={(e) => setPrompt(e.target.value)}
+                    rows={4}
+                    placeholder="e.g. Event registration collecting name, email, number of guests and dietary needs…"
+                    className="w-full resize-none rounded-xl border border-line bg-paper p-3.5 font-body text-sm text-ink outline-none transition focus:border-violet-500"
+                  />
               <div className="mt-3 space-y-1.5">
                 {EXAMPLES.map((ex) => (
                   <button
@@ -147,7 +264,82 @@ export function AiFormModal({ onClose }: { onClose: () => void }) {
                     {ex}
                   </button>
                 ))}
-              </div>
+                  </div>
+                </div>
+              ) : (
+                <div>
+                  <label className="mb-1.5 block font-body text-xs font-semibold text-ink">
+                    Upload the form you want to recreate
+                  </label>
+                  <label
+                    onDragOver={(event) => {
+                      event.preventDefault();
+                      setDragging(true);
+                    }}
+                    onDragLeave={() => setDragging(false)}
+                    onDrop={(event) => {
+                      event.preventDefault();
+                      setDragging(false);
+                      addFiles(event.dataTransfer.files);
+                    }}
+                    className={`flex cursor-pointer flex-col items-center rounded-xl border-2 border-dashed px-4 py-8 text-center transition ${
+                      dragging ? "border-violet-500 bg-violet-50" : "border-line bg-paper hover:border-violet-300"
+                    }`}
+                  >
+                    <Upload size={20} className="mb-2 text-violet-500" />
+                    <span className="font-body text-xs font-semibold text-ink">Choose files or drop them here</span>
+                    <span className="mt-1 font-body text-[11px] text-muted">
+                      Photo or scan (PNG/JPG), PDF or Word (.docx) · up to {MAX_PAGES} files, 6 MB each
+                    </span>
+                    <input
+                      type="file"
+                      multiple
+                      accept="image/*,application/pdf,.docx,.txt,.csv,.md"
+                      className="hidden"
+                      onChange={(event) => {
+                        addFiles(event.target.files);
+                        event.target.value = "";
+                      }}
+                    />
+                  </label>
+
+                  {files.length > 0 && (
+                    <ul className="mt-3 space-y-1.5">
+                      {files.map((file, index) => (
+                        <li
+                          key={`${file.name}-${index}`}
+                          className="flex items-center gap-2 rounded-lg border border-line bg-white px-3 py-2"
+                        >
+                          {file.type.startsWith("image/") ? (
+                            <ImageIcon size={13} className="shrink-0 text-violet-500" />
+                          ) : (
+                            <FileText size={13} className="shrink-0 text-violet-500" />
+                          )}
+                          <span className="min-w-0 flex-1 truncate font-body text-[12px] text-ink">{file.name}</span>
+                          <span className="shrink-0 font-mono text-[10px] text-muted">{formatSize(file.size)}</span>
+                          <button
+                            onClick={() => setFiles((current) => current.filter((_, i) => i !== index))}
+                            className="shrink-0 rounded p-1 text-muted transition hover:text-rose-600"
+                            aria-label={`Remove ${file.name}`}
+                          >
+                            <Trash2 size={12} />
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+
+                  <input
+                    value={hint}
+                    onChange={(event) => setHint(event.target.value)}
+                    placeholder="Optional: anything the reader should know (e.g. keep the Ugandan phone format)"
+                    className="mt-3 w-full rounded-lg border border-line bg-white px-3 py-2 font-body text-[12px] text-ink outline-none transition focus:border-violet-500"
+                  />
+                  <p className="mt-2 font-body text-[10.5px] leading-relaxed text-muted">
+                    The file is sent to your AI provider to be read, and is never stored on our side.
+                  </p>
+                </div>
+              )}
             </div>
           )}
 
@@ -166,12 +358,24 @@ export function AiFormModal({ onClose }: { onClose: () => void }) {
                 Cancel
               </button>
               <button
-                onClick={generate}
+                onClick={mode === "upload" ? importForm : generate}
                 disabled={canGenerate}
                 className="flex items-center gap-1.5 rounded-full bg-gradient-to-r from-violet-600 to-accent2 px-5 py-2 font-body text-xs font-semibold text-white transition hover:opacity-90 disabled:opacity-50"
               >
-                {phase === "loading" ? <Loader2 size={13} className="animate-spin" /> : <Wand2 size={13} />}
-                {phase === "loading" ? "Designing…" : "Generate form"}
+                {phase === "loading" ? (
+                  <Loader2 size={13} className="animate-spin" />
+                ) : mode === "upload" ? (
+                  <Upload size={13} />
+                ) : (
+                  <Wand2 size={13} />
+                )}
+                {phase === "loading"
+                  ? mode === "upload"
+                    ? "Reading…"
+                    : "Designing…"
+                  : mode === "upload"
+                    ? "Read the form"
+                    : "Generate form"}
               </button>
             </div>
           )}

@@ -11,9 +11,45 @@ export function aiConfigured(): boolean {
   return Boolean(process.env.AI_API_KEY && process.env.AI_BASE_URL);
 }
 
+/** One part of a multimodal message (OpenAI-compatible shape). */
+export type ContentPart =
+  | { type: "text"; text: string }
+  | { type: "image_url"; image_url: { url: string } };
+
 interface JsonMessage {
   role: "system" | "user" | "assistant";
-  content: string;
+  content: string | ContentPart[];
+}
+
+/** A base64 image as an OpenAI-compatible `image_url` content part. */
+export function imagePart(mimeType: string, base64: string): ContentPart {
+  return { type: "image_url", image_url: { url: `data:${mimeType};base64,${base64}` } };
+}
+
+/**
+ * A concrete hint to send back after a failed validation, so the single retry
+ * can actually converge.
+ *
+ * The old wording ("didn't match the required structure") told the model
+ * nothing: it repeated the same mistake — most often `"options": []` on every
+ * non-choice field — so attempt two was rejected as well and the route
+ * surfaced a raw Zod issue array to the user.
+ */
+function describeContractFailure(err: unknown): string {
+  if (!(err instanceof z.ZodError)) return "";
+  const issue = err.issues[0];
+  if (!issue) return "";
+  const path = issue.path.join(".");
+  if (/options$/.test(path)) {
+    return (
+      `Problem: ${path} — "options" must be a non-empty array of short labels on ` +
+      "single_select / multi_select / dropdown, and must be OMITTED entirely on every other type."
+    );
+  }
+  if (/type$/.test(path)) {
+    return `Problem: ${path} — "type" is not one of the allowed field types (see the catalogue).`;
+  }
+  return `Problem: ${path || "(root)"} — ${issue.message}.`;
 }
 
 /**
@@ -23,7 +59,14 @@ interface JsonMessage {
  */
 export async function completeJSON<T, I = unknown>(opts: {
   system: string;
-  user: string;
+  /**
+   * A plain string, or content parts when page images ride along (form import).
+   * Only the configured model family accepts images — the text-only ones reject
+   * them — so the import route is the only caller that sends parts today.
+   */
+  user: string | ContentPart[];
+  /** Per-call model override (e.g. a pinned vision model). */
+  model?: string;
   /** Optional zod schema the parsed reply must satisfy. */
   schema?: z.ZodType<T, z.ZodTypeDef, I>;
   temperature?: number;
@@ -52,7 +95,7 @@ export async function completeJSON<T, I = unknown>(opts: {
         Authorization: `Bearer ${key}`,
       },
       body: JSON.stringify({
-        model,
+        model: opts.model || model,
         messages,
         temperature,
         max_tokens: opts.maxTokens,
@@ -88,12 +131,14 @@ export async function completeJSON<T, I = unknown>(opts: {
   let content = await request();
   try {
     return parseStrict(content);
-  } catch {
+  } catch (err) {
     messages.push({ role: "assistant", content });
+    const hint = describeContractFailure(err);
     messages.push({
       role: "user",
       content:
         "Your previous reply was not valid JSON (or didn't match the required structure). " +
+        (hint ? `${hint} ` : "") +
         "Reply again with ONLY a valid JSON object that matches the requested shape exactly, with no markdown.",
     });
     content = await request();
