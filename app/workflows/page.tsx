@@ -79,13 +79,13 @@ export default async function WorkflowsPage() {
   if (workspace) {
     const { data: logs } = await supabase
       .from("activity_logs")
-      .select("id, action, actor_id, created_at")
+      .select("id, action, user_id, created_at")
       .eq("workspace_id", workspace.id)
       .eq("resource_type", "workflow")
       .order("created_at", { ascending: false })
       .limit(8);
     const rows = logs ?? [];
-    const actorIds = Array.from(new Set(rows.map((l) => l.actor_id).filter((v): v is string => Boolean(v))));
+    const actorIds = Array.from(new Set(rows.map((l) => l.user_id).filter((v): v is string => Boolean(v))));
     const actorNames: Record<string, string | null> = {};
     if (actorIds.length > 0) {
       const { data: profs } = await supabase.from("profiles").select("id, full_name").in("id", actorIds);
@@ -97,7 +97,7 @@ export default async function WorkflowsPage() {
       id: l.id,
       action: l.action,
       createdAt: l.created_at,
-      actorName: l.actor_id ? actorNames[l.actor_id] ?? null : null,
+      actorName: l.user_id ? actorNames[l.user_id] ?? null : null,
     }));
   }
 

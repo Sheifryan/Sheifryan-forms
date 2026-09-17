@@ -186,6 +186,47 @@ Delivery attempts are logged in the `webhook_deliveries` table and viewable in
 the Integrations tab (status code, latency, error). Add a webhook, hit **Test**,
 and check **Recent deliveries** to confirm everything works end-to-end.
 
+## Workflows
+
+Workflows live under **Workflows** in the sidebar: pick a form (or leave it as
+"any form"), then choose up to five actions to run when a response arrives.
+
+| Action | What it does |
+| --- | --- |
+| `update_status` | Moves the response to New / In Progress / Completed / Archived |
+| `assign_response` | Assigns it to an active workspace member |
+| `notify_team` | Writes to the header bell (everyone, or chosen members) |
+| `webhook` | POSTs the same signed submission payload the form-level webhooks send |
+| `email_notification` | Emails you (or an address you set) about the response |
+| `confirmation_email` | Emails the respondent, when the form collected their address |
+
+The runtime is `lib/workflows.ts`, called from the submit route right after the
+response is written. Three things worth knowing:
+
+- **Best-effort, exactly like webhooks.** Each action is isolated, so a bad URL
+  or a missing email key is recorded in the run log and the respondent's
+  submission still succeeds.
+- **Exactly once per response.** `workflow_runs` carries a unique
+  `(workflow_id, response_id)`, so a retried submission can never assign or
+  email twice. Each run stamps `last_run_at` and writes a `workflow.ran` entry to
+  the activity feed (with a null actor — nobody signed in triggered it).
+- **Metered.** A run costs 1 credit, matching the wallet's "1 credit = 1
+  workflow run". A workspace that can't afford it simply isn't charged; the
+  workflow still runs.
+
+Email needs `RESEND_API_KEY` plus a sender address: `DEFAULT_FROM_EMAIL`
+(preferred, and it may use the `Name <address>` form) or `SERVER_EMAIL`.
+`NOTIFY_FROM_EMAIL` is still honoured first for backwards compatibility — it is
+the name the `notify-submission` Edge Function reads, and that function does
+**not** read the app's `.env` (set its secrets in Supabase separately). The
+sending domain must be verified in Resend. With no key or no sender the email
+actions report *"email is not configured"* / *"no sender configured"* in the run
+log instead of failing a submission, and **each email sent costs 1 credit** —
+charged only when it actually went out.
+
+`notifications` and `workflow_runs` arrive in `0020_workflow_execution.sql`;
+apply it with the other migrations (see Setup).
+
 ## How it's structured
 
 - `components/AppShell.tsx` — the sidebar shell (Home / Submissions /
@@ -253,6 +294,15 @@ and check **Recent deliveries** to confirm everything works end-to-end.
 - `app/f/[id]/` — the public form. Pre-checks closure conditions and the
   password gate before rendering anything, so visitors see a clear message
   instead of filling out a form that will reject them on submit.
+- `app/workflows/` + `lib/workflows.ts` + `app/api/workflows/route.ts` —
+  **workflows**: a trigger (a new response on one form, or on any form in the
+  workspace) plus up to five ordered actions. The route is the CRUD surface and
+  `runWorkflows()` is the runtime, invoked by the submit route. Each run is
+  recorded in `workflow_runs` (which doubles as the exactly-once guard), audited
+  as `workflow.ran`, metered one credit, and delivered to people through
+  `notifications` — the header bell in `components/NotificationsBell.tsx`.
+- `app/api/notifications/route.ts` — the bell's API: latest 20 for the caller
+  plus an unread count, and "mark read" for one or all.
 - `app/api/forms/[id]/submit/route.ts` — re-validates every submission
   server-side against the form's schema, checks the form is published,
   **enforces the password gate, `closeDate`, and `maxResponses`** (the

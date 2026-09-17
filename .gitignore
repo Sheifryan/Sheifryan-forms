@@ -8,6 +8,7 @@ node_modules
 tests/ask-your-data/dist/
 tests/ai-contracts/dist/
 tests/ai-import/dist/
+tests/workflows/dist/
 
 __pycache__
 *.pyc

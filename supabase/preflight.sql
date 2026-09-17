@@ -40,4 +40,6 @@ union all select '0018_personal_workspace_repair.sql', 'fn owns_workspace(uuid)'
 -- with a comment on forms.workspace_id. The check is catalog-only on purpose, so
 -- this file stays runnable on a database where `forms` doesn't exist yet.
 union all select '0019_backfill_forms_workspace.sql', 'comment forms.workspace_id', (exists (select 1 from pg_description d join pg_class c on c.oid = d.objoid join pg_namespace n on n.oid = c.relnamespace join pg_attribute a on a.attrelid = c.oid and a.attnum = d.objsubid where n.nspname = 'public' and c.relname = 'forms' and a.attname = 'workspace_id' and d.description like '0019:%'))
+union all select '0020_workflow_execution.sql',     'table public.notifications',          (to_regclass('public.notifications') is not null)
+union all select '0020_workflow_execution.sql',     'table public.workflow_runs',          (to_regclass('public.workflow_runs') is not null)
 order by migration, signature;
