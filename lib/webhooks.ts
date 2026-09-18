@@ -141,7 +141,7 @@ export async function deliverWebhook(
   const body = JSON.stringify(payload);
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
-    "User-Agent": "EasyForm-Webhook/1.0",
+    "User-Agent": "NibbleForms-Webhook/1.0",
     "X-FormCraft-Event": event,
     "X-FormCraft-Webhook-Id": webhook.id,
   };

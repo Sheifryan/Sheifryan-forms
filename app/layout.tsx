@@ -3,8 +3,30 @@ import "./globals.css";
 import { ToastProvider } from "@/components/Toast";
 
 export const metadata: Metadata = {
-  title: "NibbleForms",
-  description: "Build, share, and analyze forms — the friendly way.",
+  // Set NEXT_PUBLIC_SITE_URL to your deployed origin (e.g.
+  // https://nibbleforms.example.com) to get absolute OG/canonical URLs.
+  ...(process.env.NEXT_PUBLIC_SITE_URL
+    ? { metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL) }
+    : {}),
+  title: {
+    default: "NibbleForms — Build forms. Collect responses. Turn data into action.",
+    template: "%s · NibbleForms",
+  },
+  description:
+    "A modern form platform for creating beautiful forms, collecting responses, analyzing submissions and automating workflows — all from one place.",
+  openGraph: {
+    title: "NibbleForms — Build forms. Collect responses. Turn data into action.",
+    description:
+      "Create powerful forms in minutes, collect responses securely, analyze your data with AI, and automate what happens next.",
+    type: "website",
+    siteName: "NibbleForms",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "NibbleForms — Build forms. Collect responses. Turn data into action.",
+    description:
+      "Create powerful forms in minutes, collect responses securely, and turn your data into action.",
+  },
 };
 
 // Runs before paint so the stored theme never flashes. Must stay inline.

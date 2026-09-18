@@ -4,70 +4,28 @@ import { useMemo, useState } from "react";
 import {
   AlignLeft,
   ArrowLeft,
-  Briefcase,
   Calendar,
-  CalendarCheck,
   CheckSquare,
   ChevronsUpDown,
   CircleDot,
   Clock,
-  GraduationCap,
   Hash,
-  Headphones,
-  HeartHandshake,
-  Home,
   LayoutTemplate,
   Link,
   Mail,
-  Megaphone,
-  MessageSquare,
   Paperclip,
   Phone,
   Search,
-  ShoppingCart,
   Sparkles,
   Square,
   Star,
-  Stethoscope,
   Type,
-  UserPlus,
-  UtensilsCrossed,
   X,
 } from "lucide-react";
 import type { FormField } from "@/lib/schema";
 import { FIELD_LABELS } from "@/lib/schema";
 import { TEMPLATES, type FormTemplate } from "@/lib/templates";
-
-// Icons + pastel accent per template category (Zoho-style browse-by-category).
-const CATEGORY_ICONS: Record<string, typeof Type> = {
-  Registration: UserPlus,
-  HR: Briefcase,
-  Feedback: MessageSquare,
-  Marketing: Megaphone,
-  Sales: ShoppingCart,
-  Events: CalendarCheck,
-  Education: GraduationCap,
-  Healthcare: Stethoscope,
-  Hospitality: UtensilsCrossed,
-  "Real Estate": Home,
-  Support: Headphones,
-  "Non-profit": HeartHandshake,
-};
-
-const CATEGORY_ACCENTS: Record<string, string> = {
-  Registration: "bg-sky-50 text-sky-600",
-  HR: "bg-violet-50 text-violet-600",
-  Feedback: "bg-amber-50 text-amber-600",
-  Marketing: "bg-pink-50 text-pink-600",
-  Sales: "bg-emerald-50 text-emerald-600",
-  Events: "bg-indigo-50 text-indigo-600",
-  Education: "bg-teal-50 text-teal-600",
-  Healthcare: "bg-rose-50 text-rose-600",
-  Hospitality: "bg-orange-50 text-orange-600",
-  "Real Estate": "bg-lime-50 text-lime-600",
-  Support: "bg-cyan-50 text-cyan-600",
-  "Non-profit": "bg-fuchsia-50 text-fuchsia-600",
-};
+import { CATEGORY_ACCENTS, CATEGORY_ICONS } from "@/lib/templateCategories";
 
 // Icon per field type, used in the read-only template preview.
 const FIELD_ICONS: Record<string, typeof Type> = {

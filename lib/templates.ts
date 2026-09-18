@@ -609,3 +609,29 @@ export const TEMPLATES: FormTemplate[] = [
 
 // Re-export for convenience where only labels are needed (e.g. icons lookup).
 export { FIELD_LABELS };
+
+/**
+ * Serializable view of the template gallery (no `build` function) so it can be
+ * passed from a server component into a client component. Functions can't cross
+ * the server/client boundary, which is why the public /templates page passes
+ * these summaries rather than TEMPLATES itself.
+ */
+export interface TemplateSummary {
+  id: string;
+  title: string;
+  category: string;
+  description: string;
+  featured: boolean;
+  fieldCount: number;
+}
+
+export function templateSummaries(): TemplateSummary[] {
+  return TEMPLATES.map((t) => ({
+    id: t.id,
+    title: t.title,
+    category: t.category,
+    description: t.description,
+    featured: Boolean(t.featured),
+    fieldCount: t.build().length,
+  }));
+}

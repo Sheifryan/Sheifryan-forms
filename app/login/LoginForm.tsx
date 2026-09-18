@@ -57,12 +57,12 @@ export function LoginForm() {
             E
           </div>
           <span className="font-display text-[15px] font-bold text-ink">
-            Easy<span className="text-signal">Form</span>
+            Nibble<span className="text-signal">Forms</span>
           </span>
         </div>
         <h1 className="mb-1 font-display text-xl text-ink">Sign in</h1>
         <p className="mb-6 font-body text-sm text-muted">
-          Use your EasyForm account to continue.
+          Use your NibbleForms account to continue.
         </p>
 
         {expiredError && (
@@ -116,7 +116,7 @@ export function LoginForm() {
         </form>
 
         <p className="mt-5 text-center font-body text-sm text-muted">
-          New to EasyForm?{" "}
+          New to NibbleForms?{" "}
           <Link href="/signup" className="font-medium text-signal hover:underline">
             Create an account
           </Link>

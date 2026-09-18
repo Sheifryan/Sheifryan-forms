@@ -1225,7 +1225,7 @@ function ShareTab({ formId, title }: { formId: string; title: string }) {
   function embedHtml(kind: "iframe" | "script"): string {
     const base = origin || "https://your-domain.com";
     if (kind === "iframe") {
-      return `<!-- EasyForm embed — paste where the form should appear -->
+      return `<!-- NibbleForms embed — paste where the form should appear -->
 <iframe
   src="${base}/widgets/form.html?form=${formId}"
   width="100%"
@@ -1237,7 +1237,7 @@ function ShareTab({ formId, title }: { formId: string; title: string }) {
   allow="camera; microphone"
 ></iframe>`;
     }
-    return `<!-- EasyForm embed — paste where the form should appear -->
+    return `<!-- NibbleForms embed — paste where the form should appear -->
 <script
   src="${base}/widgets/easyform.js"
   data-form-id="${formId}"
