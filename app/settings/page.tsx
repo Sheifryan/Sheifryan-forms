@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { AppShell } from "@/components/AppShell";
 import { resolveActiveWorkspace, resolveProfile } from "@/lib/workspace-server";
 import { planById } from "@/lib/plans";
+import { computeUsage, EMPTY_USAGE } from "@/lib/usage";
 import { SettingsClient } from "./SettingsClient";
 
 export default async function SettingsPage({ searchParams }: { searchParams: { tab?: string } }) {
@@ -104,39 +105,11 @@ export default async function SettingsPage({ searchParams }: { searchParams: { t
     }));
   }
 
-  // Live usage for the Billing tab, mirroring /api/billing (this runs server-
-  // side so the page renders with real numbers, no client round-trip).
-  let usage = { forms: 0, monthlyResponses: 0, responses: 0, storageBytes: 0, workflows: 0, fileUploads: 0 };
+  // Live usage for the Billing tab, from the shared meter in lib/usage.ts. This
+  // runs server-side so the page renders with real numbers and no client
+  // round-trip, and it is the same function GET /api/billing uses.
   const plan = planById(workspace?.plan);
-  if (workspace) {
-    const monthStart = new Date();
-    monthStart.setDate(1);
-    monthStart.setHours(0, 0, 0, 0);
-
-    const { count: formsCount } = await supabase.from("forms").select("id", { count: "exact", head: true }).eq("workspace_id", workspace.id);
-    const { data: formRows } = await supabase.from("forms").select("id").eq("workspace_id", workspace.id);
-    const formIds = (formRows ?? []).map((f) => f.id);
-    const empty = ["00000000-0000-0000-0000-000000000000"];
-    const scopedIn = (formIds.length > 0 ? formIds : empty);
-
-    let rq1 = supabase.from("responses").select("id", { count: "exact", head: true });
-    let rq2 = supabase.from("responses").select("id", { count: "exact", head: true });
-    const { count: responsesCount } = await rq1.in("form_id", scopedIn);
-    const { count: monthCount } = await rq2.in("form_id", scopedIn).gte("created_at", monthStart.toISOString());
-    const { count: workflowsCount } = await supabase.from("workflows").select("id", { count: "exact", head: true }).eq("workspace_id", workspace.id);
-
-    const { data: files } = await supabase.from("form_files").select("size_bytes").in("form_id", scopedIn);
-    const { count: uploadsCount } = await supabase.from("form_files").select("id", { count: "exact", head: true }).in("form_id", scopedIn);
-
-    usage = {
-      forms: formsCount ?? 0,
-      monthlyResponses: monthCount ?? 0,
-      responses: responsesCount ?? 0,
-      storageBytes: (files ?? []).reduce((a, f) => a + Number(f.size_bytes ?? 0), 0),
-      workflows: workflowsCount ?? 0,
-      fileUploads: uploadsCount ?? 0,
-    };
-  }
+  const usage = workspace ? await computeUsage(supabase, workspace.id) : EMPTY_USAGE;
 
   const activeTab = searchParams.tab ?? "profile";
   const validTabs = ["profile", "preferences", "notifications", "security", "billing", "danger", "organisation"];

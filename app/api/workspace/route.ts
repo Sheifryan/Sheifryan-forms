@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { resolveActiveWorkspace } from "@/lib/workspace-server";
-import { planById } from "@/lib/plans";
+import { isPlanId } from "@/lib/plans";
 
 // Current personal workspace + profile. GET returns the pair; PATCH updates
 // workspace-level fields (name, plan, onboarding completion).
@@ -39,12 +39,10 @@ export async function PATCH(request: Request) {
   if (typeof body.name === "string" && body.name.trim() && body.name.trim().length <= 80) {
     update.name = body.name.trim();
   }
-  if (typeof body.plan === "string" && ["free", "pro", "premium"].includes(body.plan)) {
-    const limits = planById(body.plan).limits;
-    if (limits.forms >= 0) {
-      // Protected downgrades are handled by the billing route (usage check).
-      // Here we accept owner-initiated plan changes directly.
-    }
+  if (isPlanId(body.plan)) {
+    // Protected downgrades are handled by the billing route (usage check).
+    // Here we accept owner-initiated plan changes directly. Any tier is valid,
+    // including the organisation plans (starter/business/enterprise).
     update.plan = body.plan;
   }
   if (body.completeOnboarding === true) {

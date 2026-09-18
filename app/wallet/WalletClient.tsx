@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { Check, Coins, Plus } from "lucide-react";
 import { useToast } from "@/components/Toast";
 import { useFormat } from "@/components/FormatProvider";
-import { CREDIT_PACKS } from "@/lib/plans";
+import { CREDIT_PACKS, priceUgx } from "@/lib/plans";
 
 interface Txn {
   id: string;
@@ -107,9 +107,9 @@ export function WalletClient({
             </div>
             <p className="font-body text-[12px] text-slate-500 dark:text-mutedDark">credits</p>
             {p.bonus && <p className="mt-1 font-body text-[11px] font-medium text-success">{p.bonus}</p>}
-            <p className="mt-2 font-body text-[15px] font-semibold text-ink dark:text-inkDark">${p.priceUsd}</p>
+            <p className="mt-2 font-body text-[15px] font-semibold text-ink dark:text-inkDark">{priceUgx(p.priceUsd)}</p>
             <button onClick={() => setConfirmOpen({ credits: p.credits, priceUsd: p.priceUsd })} className="mt-2.5 w-full rounded-lg bg-signal px-3 py-1.5 font-body text-[11.5px] font-semibold text-white transition hover:opacity-90">
-              Buy ${p.priceUsd}
+              Buy {priceUgx(p.priceUsd)}
             </button>
           </div>
         ))}
@@ -168,7 +168,7 @@ export function WalletClient({
           <div className="w-full max-w-sm rounded-xl border border-line bg-white p-5 shadow-2xl dark:border-lineDark dark:bg-panelDark" onClick={(e) => e.stopPropagation()}>
             <h3 className="font-display text-base font-semibold text-ink dark:text-inkDark">Buy credits</h3>
             <p className="mt-2 font-body text-[13px] text-slate-500 dark:text-mutedDark">
-              Add <b>{formatNumber(confirmOpen.credits)} credits</b> to <b>{workspaceName}</b> for <b>${confirmOpen.priceUsd}</b>.
+              Add <b>{formatNumber(confirmOpen.credits)} credits</b> to <b>{workspaceName}</b> for <b>{priceUgx(confirmOpen.priceUsd)}</b>.
             </p>
             <p className="mt-1 font-body text-[11.5px] text-slate-400 dark:text-mutedDark">This is a simulated purchase — no real charge will be made.</p>
             <div className="mt-4 flex justify-end gap-2.5">
@@ -176,7 +176,7 @@ export function WalletClient({
                 Cancel
               </button>
               <button onClick={() => void confirmBuy()} disabled={buying} className="flex items-center gap-1.5 rounded-lg bg-signal px-3.5 py-2 font-body text-xs font-semibold text-white transition hover:opacity-90 disabled:opacity-50">
-                <Check size={13} /> {buying ? "Processing…" : `Buy for $${confirmOpen.priceUsd}`}
+                <Check size={13} /> {buying ? "Processing…" : `Buy for ${priceUgx(confirmOpen.priceUsd)}`}
               </button>
             </div>
           </div>

@@ -9,6 +9,7 @@
 import { NextResponse } from "next/server";
 import { createClient, createServiceClient } from "@/lib/supabase/server";
 import { aiConfigured, aiRateLimited, completeJSON } from "@/lib/ai/client";
+import { recordAiUsage } from "@/lib/ai/quota";
 import { buildAskPrompt } from "@/lib/ai/analysis/prompts";
 import { canAnalyseForm } from "@/lib/ai/analysis/access";
 import { aiErrorMessage } from "@/lib/ai/errors";
@@ -116,6 +117,12 @@ export async function POST(request: Request) {
       schema: askQuerySchema,
       maxTokens: 1200,
     });
+
+    // Meter one AI request for the workspace that owns the form (meter-only:
+    // nothing blocks on this yet). Placed here so it is counted exactly once,
+    // whichever branch below returns — and never on a cache hit or a failure.
+    if (serviceClient)
+      void recordAiUsage(serviceClient, { workspaceId: form.workspace_id, userId: user.id, formId: form.id, kind: "ask" });
 
     if (raw.operation === "clarify") {
       const answer: StructuredAnswer = {

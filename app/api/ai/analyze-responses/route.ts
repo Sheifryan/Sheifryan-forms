@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient, createServiceClient } from "@/lib/supabase/server";
 import { aiConfigured, aiRateLimited, completeJSON } from "@/lib/ai/client";
+import { recordAiUsage } from "@/lib/ai/quota";
 import { buildAnalysisPrompt } from "@/lib/ai/prompts";
 import { canAnalyseForm } from "@/lib/ai/analysis/access";
 import { aiErrorMessage } from "@/lib/ai/errors";
@@ -86,6 +87,8 @@ export async function POST(request: Request) {
 
     // Persist through the service client (RLS only grants the owner SELECT).
     const service = createServiceClient();
+    // Meter the analysis (meter-only: nothing blocks on this yet).
+    void recordAiUsage(service, { workspaceId: form.workspace_id, userId: user.id, formId, kind: "insight" });
     const { data: saved, error: insertError } = await service
       .from("form_analyses")
       .insert({

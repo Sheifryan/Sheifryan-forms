@@ -1,7 +1,8 @@
 import { z } from "zod";
 import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { createClient, createServiceClient } from "@/lib/supabase/server";
 import { aiConfigured, aiRateLimited, completeJSON } from "@/lib/ai/client";
+import { recordAiUsage } from "@/lib/ai/quota";
 import { buildCritiquePrompt, buildImprovePrompt, type EditableFormShape } from "@/lib/ai/prompts";
 import { improveSchema, normalizeGeneratedFields } from "@/lib/ai/contracts";
 import { canAnalyseForm } from "@/lib/ai/analysis/access";
@@ -84,6 +85,8 @@ export async function POST(request: Request) {
     const { system, user: userPrompt } = buildImprovePrompt(effective, critique.summary);
     const raw = await completeJSON<RawImprove>({ system, user: userPrompt, schema: improveSchema });
     const fields = normalizeGeneratedFields(raw.fields, effective.fields);
+    // One user action, however many provider calls it took (critique → improve).
+    void recordAiUsage(createServiceClient(), { workspaceId: form.workspace_id, userId: user.id, formId, kind: "improve" });
     return NextResponse.json({ summary: raw.summary, fields });
   } catch (err) {
     console.error("[ai/improve]", err);

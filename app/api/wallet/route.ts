@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient, createServiceClient } from "@/lib/supabase/server";
 import { resolveActiveWorkspace } from "@/lib/workspace-server";
+import { priceUgx } from "@/lib/plans";
 
 // Credit ledger. Purchases (inserts) are simulated here — there's no real
 // payment provider wired into the wallet yet (forms already have MarzPay for
@@ -33,7 +34,7 @@ export async function POST(request: Request) {
     workspace_id: workspace.id,
     kind: "purchase",
     category: "purchase",
-    description: `Purchased ${credits.toLocaleString()} credits${Number.isFinite(priceUsd) && priceUsd > 0 ? ` — USD ${priceUsd}` : ""}`,
+    description: `Purchased ${credits.toLocaleString()} credits${Number.isFinite(priceUsd) && priceUsd > 0 ? ` — ${priceUgx(priceUsd)} (USD ${priceUsd})` : ""}`,
     amount: credits,
     balance_after: balance + credits,
   });

@@ -9,6 +9,7 @@ tests/ask-your-data/dist/
 tests/ai-contracts/dist/
 tests/ai-import/dist/
 tests/workflows/dist/
+tests/metering/dist/
 
 __pycache__
 *.pyc

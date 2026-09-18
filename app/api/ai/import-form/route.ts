@@ -8,8 +8,10 @@
 // to Supabase Storage, form_files or the database.
 
 import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { createClient, createServiceClient } from "@/lib/supabase/server";
+import { resolveActiveWorkspace } from "@/lib/workspace-server";
 import { aiConfigured, aiRateLimited, completeJSON, imagePart, type ContentPart } from "@/lib/ai/client";
+import { recordAiUsage } from "@/lib/ai/quota";
 import { buildImportPrompt } from "@/lib/ai/prompts";
 import { formDraftSchema, normalizeFormDraft, type FormDraftOutput } from "@/lib/ai/contracts";
 import {
@@ -122,6 +124,11 @@ export async function POST(request: Request) {
       model: process.env.AI_VISION_MODEL || undefined,
     });
     const draft = normalizeFormDraft(raw);
+
+    // Meter the import against the workspace the user is working in (meter-only:
+    // nothing blocks on this yet). One uploaded form = one AI request.
+    const { workspace } = await resolveActiveWorkspace();
+    void recordAiUsage(createServiceClient(), { workspaceId: workspace?.id ?? null, userId: user.id, kind: "import" });
 
     return NextResponse.json({
       ...draft,

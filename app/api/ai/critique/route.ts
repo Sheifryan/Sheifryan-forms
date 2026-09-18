@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { createClient, createServiceClient } from "@/lib/supabase/server";
 import { aiConfigured, aiRateLimited, completeJSON } from "@/lib/ai/client";
+import { recordAiUsage } from "@/lib/ai/quota";
 import { buildCritiquePrompt, type EditableFormShape } from "@/lib/ai/prompts";
 import { canAnalyseForm } from "@/lib/ai/analysis/access";
 import { critiqueSchema, type CritiqueResult } from "@/lib/ai/contracts";
@@ -67,6 +68,8 @@ export async function POST(request: Request) {
       user: userPrompt,
       schema: critiqueSchema,
     });
+    // Meter the review (meter-only: nothing blocks on this yet).
+    void recordAiUsage(createServiceClient(), { workspaceId: form.workspace_id, userId: user.id, formId, kind: "critique" });
     return NextResponse.json({ critique });
   } catch (err) {
     console.error("[ai/critique]", err);

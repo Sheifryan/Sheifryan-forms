@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { createClient, createServiceClient } from "@/lib/supabase/server";
+import { resolveActiveWorkspace } from "@/lib/workspace-server";
 import { aiConfigured, aiRateLimited, completeJSON } from "@/lib/ai/client";
+import { recordAiUsage } from "@/lib/ai/quota";
 import { buildGenerationPrompt } from "@/lib/ai/prompts";
 import { formDraftSchema, normalizeFormDraft, type FormDraftOutput } from "@/lib/ai/contracts";
 import { aiErrorMessage } from "@/lib/ai/errors";
@@ -34,6 +36,10 @@ export async function POST(request: Request) {
   try {
     const { system, user: userPrompt } = buildGenerationPrompt(prompt);
     const raw = await completeJSON<FormDraftOutput>({ system, user: userPrompt, schema: formDraftSchema });
+    // No form exists yet, so the request is metered against the workspace the
+    // user is working in (meter-only: nothing blocks on this yet).
+    const { workspace } = await resolveActiveWorkspace();
+    void recordAiUsage(createServiceClient(), { workspaceId: workspace?.id ?? null, userId: user.id, kind: "generate" });
     return NextResponse.json(normalizeFormDraft(raw));
   } catch (err) {
     console.error("[ai/generate-form]", err);

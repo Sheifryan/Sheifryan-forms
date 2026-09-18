@@ -6,7 +6,9 @@ import { AlertTriangle, Bell, BellRing, Check, CreditCard, KeyRound, MonitorSmar
 import { useToast } from "@/components/Toast";
 import { applyTheme } from "@/lib/theme";
 import { useFormat } from "@/components/FormatProvider";
-import { formatBytes, usagePercent } from "@/lib/plans";
+import { formatBytes, planById, priceUgx, usagePercent } from "@/lib/plans";
+import { planUsageRows } from "@/lib/usage";
+import type { PlanUsage } from "@/lib/usage";
 import type { Plan, PlanId } from "@/lib/plans";
 import { PLAN_ORDER, PLANS, planOrderFor } from "@/lib/plans";
 
@@ -16,7 +18,7 @@ type Prefs = {
   timezone?: string;
   notifications?: { responses?: boolean; weekly?: boolean; usage?: boolean; workflowFailures?: boolean };
 };
-type Usage = { forms: number; monthlyResponses: number; responses: number; storageBytes: number; workflows: number; fileUploads: number };
+type Usage = PlanUsage;
 
 const TABS: { id: string; label: string; icon: typeof User }[] = [
   { id: "profile", label: "Profile", icon: User },
@@ -173,7 +175,7 @@ export function SettingsClient({
           )}
           {tab === "org-notifications" && orgPreferences && <OrgNotificationsTab preferences={orgPreferences} />}
           {tab === "security" && <SecurityTab email={email} />}
-          {tab === "billing" && <BillingTab workspace={workspace} plan={plan} usage={usage} seats={members.length} isOrganisation={workspace.kind === "business"} />}
+          {tab === "billing" && <BillingTab workspace={workspace} plan={plan} usage={usage} isOrganisation={workspace.kind === "business"} />}
           {tab === "danger" && <DangerZone workspace={workspace} email={email} organisation={workspace.kind === "business"} members={members} isOwner={isOwner} />}
         </div>
       </div>
@@ -558,7 +560,7 @@ function SecurityTab({ email }: { email: string }) {
     </>
   );
 }
-function BillingTab({ workspace, plan, usage, seats = 0, isOrganisation = false }: { workspace: { name: string; plan: string; credits: number }; plan: Plan; usage: Usage; seats?: number; isOrganisation?: boolean }) {
+function BillingTab({ workspace, plan, usage, isOrganisation = false }: { workspace: { name: string; plan: string; credits: number }; plan: Plan; usage: Usage; isOrganisation?: boolean }) {
   const router = useRouter();
   const toast = useToast();
   const { formatNumber } = useFormat();
@@ -585,11 +587,12 @@ function BillingTab({ workspace, plan, usage, seats = 0, isOrganisation = false 
   return (
     <>
       {/* Current plan */}
-      <SectionCard title="Current plan" desc={`You're on the ${PLANS[workspace.plan as PlanId].name} plan. Your workspace: ${workspace.name}.`}>
+      <SectionCard title="Current plan" desc={`You're on the ${planById(workspace.plan).name} plan. Your workspace: ${workspace.name}.`}>
         <div className="grid gap-4 sm:grid-cols-3">
           {planOrderFor(isOrganisation ? "business" : "personal").map((id) => {
             const p = PLANS[id];
             const current = id === workspace.plan;
+            const price = p.priceMonthly > 0 ? priceUgx(p.priceMonthly) : null;
             return (
               <div key={id} className={`rounded-xl border p-4 ${current ? "border-signal bg-signalSoft/10" : "border-line bg-white dark:border-lineDark dark:bg-panelDark"}`}>
                 <div className="flex items-center justify-between">
@@ -597,7 +600,8 @@ function BillingTab({ workspace, plan, usage, seats = 0, isOrganisation = false 
                   {current && <span className="rounded-full bg-signal px-2 py-0.5 font-body text-[10px] font-semibold text-white">Current</span>}
                 </div>
                 <p className="font-body text-[20px] font-semibold text-ink dark:text-inkDark">
-                  ${p.priceMonthly}<span className="font-body text-[12px] text-slate-400 dark:text-mutedDark">/mo</span>
+                  {price ?? "Free"}
+                  {price && <span className="font-body text-[12px] text-slate-400 dark:text-mutedDark">/mo</span>}
                 </p>
                 <ul className="mt-2 space-y-1">
                   {p.features.map((f) => (
@@ -624,12 +628,12 @@ function BillingTab({ workspace, plan, usage, seats = 0, isOrganisation = false 
 
       {/* Limits + usage */}
       <SectionCard title="Plan limits & usage" desc="How much of each limit you've used this month.">
-        <UsageRow label="Forms" used={usage.forms} limit={plan.limits.forms} />
-        <UsageRow label="Responses / month" used={usage.monthlyResponses} limit={plan.limits.monthlyResponses} />
-        <UsageRow label="Storage" used={usage.storageBytes} limit={plan.limits.storageBytes} bytes />
-        <UsageRow label="Workflows" used={usage.workflows} limit={plan.limits.workflows} />
-        <UsageRow label="File uploads" used={usage.fileUploads} limit={plan.limits.fileUploads} />
-        {isOrganisation && <UsageRow label="Members" used={seats} limit={plan.limits.members} />}
+        {planUsageRows(plan.limits, isOrganisation).map((row) => (
+          <UsageRow key={row.key} label={row.label} used={usage[row.key]} limit={row.limit} bytes={row.bytes} />
+        ))}
+        <p className="mt-3 font-body text-[11px] text-slate-400 dark:text-mutedDark">
+          AI requests are metered per workspace and reset on the 1st. They&apos;re not charged to your wallet yet.
+        </p>
         <p className="mt-3 font-body text-[11px] text-slate-400 dark:text-mutedDark">
           Wallet balance: <b className="text-ink dark:text-inkDark">{formatNumber(workspace.credits)} credits</b>. Buy more from the{" "}
           <button type="button" onClick={() => router.push("/wallet")} className="font-semibold text-signal hover:underline">

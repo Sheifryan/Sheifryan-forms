@@ -1,3 +1,5 @@
+import { formatUgx } from "@/lib/schema";
+
 export type PlanId = "free" | "pro" | "premium" | "starter" | "business" | "enterprise";
 
 export interface PlanLimits {
@@ -6,6 +8,11 @@ export interface PlanLimits {
   storageBytes: number; // -1 = unlimited
   workflows: number; // -1 = unlimited
   fileUploads: number; // -1 = unlimited
+  /**
+   * AI requests per month (ask / insights / generate / improve / critique /
+   * import). Metered in ai_usage and shown in the Billing tab; -1 = unlimited.
+   */
+  aiRequestsPerMonth: number;
   creditsPerMonth: number; // -1 = unlimited
   /** Seat limit for organisation workspaces (1 for individual plans). */
   members: number; // -1 = unlimited
@@ -23,6 +30,23 @@ export interface Plan {
   highlight?: boolean;
 }
 
+// ---- Pricing ----------------------------------------------------------------
+// USD is the source of truth for plan and credit-pack prices above; shillings
+// are derived for display with one fixed rate, so repricing the product is a
+// single number change. Note this is NOT the same rate as a payment field's
+// `usdToUgxRate` (lib/schema.ts) — that one converts a respondent's charge.
+export const USD_TO_UGX = 3800;
+
+/** Convert a USD price to whole shillings. */
+export function usdToUgx(usd: number): number {
+  return Math.round((Number.isFinite(usd) ? usd : 0) * USD_TO_UGX);
+}
+
+/** Shillings label for a USD price, e.g. 19 -> "UGX 72,200". */
+export function priceUgx(usd: number): string {
+  return formatUgx(usdToUgx(usd));
+}
+
 export const PLANS: Record<PlanId, Plan> = {
   free: {
     id: "free",
@@ -37,8 +61,9 @@ export const PLANS: Record<PlanId, Plan> = {
       fileUploads: 100,
       creditsPerMonth: 500,
       members: 1,
+      aiRequestsPerMonth: 10,
     },
-    features: ["5 forms", "500 responses / month", "1 GB storage", "1 workflow", "100 file uploads"],
+    features: ["5 forms", "500 responses / month", "1 GB storage", "1 workflow", "100 file uploads", "10 AI requests / month"],
     badgeClass: "bg-paper text-muted border border-line",
   },
   pro: {
@@ -54,8 +79,9 @@ export const PLANS: Record<PlanId, Plan> = {
       fileUploads: 1000,
       creditsPerMonth: 2000,
       members: 1,
+      aiRequestsPerMonth: 100,
     },
-    features: ["25 forms", "5,000 responses / month", "5 GB storage", "5 workflows", "1,000 file uploads"],
+    features: ["25 forms", "5,000 responses / month", "5 GB storage", "5 workflows", "1,000 file uploads", "100 AI requests / month"],
     badgeClass: "bg-signalSoft/20 text-signal",
     highlight: true,
   },
@@ -72,8 +98,9 @@ export const PLANS: Record<PlanId, Plan> = {
       fileUploads: 5000,
       creditsPerMonth: 5000,
       members: 1,
+      aiRequestsPerMonth: 500,
     },
-    features: ["100 forms", "50,000 responses / month", "25 GB storage", "25 workflows", "5,000 file uploads"],
+    features: ["100 forms", "50,000 responses / month", "25 GB storage", "25 workflows", "5,000 file uploads", "500 AI requests / month"],
     badgeClass: "bg-accent2/15 text-accent2",
   },
 
@@ -91,8 +118,9 @@ export const PLANS: Record<PlanId, Plan> = {
       fileUploads: 1000,
       creditsPerMonth: 2000,
       members: 5,
+      aiRequestsPerMonth: 50,
     },
-    features: ["25 forms", "5,000 responses / month", "10 GB storage", "5 workflows", "Up to 5 members"],
+    features: ["25 forms", "5,000 responses / month", "10 GB storage", "5 workflows", "Up to 5 members", "50 AI requests / month"],
     badgeClass: "bg-sky-100 text-sky-700",
   },
   business: {
@@ -108,8 +136,9 @@ export const PLANS: Record<PlanId, Plan> = {
       fileUploads: 5000,
       creditsPerMonth: 10000,
       members: 25,
+      aiRequestsPerMonth: 300,
     },
-    features: ["Unlimited forms", "20,000 responses / month", "100 GB storage", "20 workflows", "Up to 25 members"],
+    features: ["Unlimited forms", "20,000 responses / month", "100 GB storage", "20 workflows", "Up to 25 members", "300 AI requests / month"],
     badgeClass: "bg-signalSoft/25 text-signal",
     highlight: true,
   },
@@ -126,8 +155,9 @@ export const PLANS: Record<PlanId, Plan> = {
       fileUploads: -1,
       creditsPerMonth: 50000,
       members: 250,
+      aiRequestsPerMonth: -1,
     },
-    features: ["Unlimited forms", "100,000 responses / month", "1 TB storage", "Unlimited workflows", "Up to 250 members"],
+    features: ["Unlimited forms", "100,000 responses / month", "1 TB storage", "Unlimited workflows", "Up to 250 members", "Unlimited AI requests"],
     badgeClass: "bg-accent2/15 text-accent2",
   },
 };
@@ -145,6 +175,13 @@ export function planOrderFor(kind: string | null | undefined): PlanId[] {
 
 export function planById(id: string | null | undefined): Plan {
   return PLANS[(id as PlanId) in PLANS ? (id as PlanId) : "free"];
+}
+
+/** True for any valid plan id. Derived from PLANS so the two can never drift —
+ *  organisation tiers (starter/business/enterprise) are sold too, not just the
+ *  personal ladder. */
+export function isPlanId(value: unknown): value is PlanId {
+  return typeof value === "string" && value in PLANS;
 }
 
 // Monospace-ish friendly byte formatting for quota bars (e.g. "2.4 GB").
