@@ -12,7 +12,8 @@
     "test:ask": "tsc -p tests/ask-your-data/tsconfig.json && node --test tests/ask-your-data/dist/tests/ask-your-data/engine.test.js",
     "test:ai": "tsc -p tests/ai-contracts/tsconfig.json && node --require ./tests/ai-contracts/alias.cjs --test tests/ai-contracts/dist/tests/ai-contracts/contracts.test.js",
     "test:import": "tsc -p tests/ai-import/tsconfig.json && node --test tests/ai-import/dist/tests/ai-import/extract.test.js",
-    "test:workflows": "tsc -p tests/workflows/tsconfig.json && node --test tests/workflows/dist/tests/workflows/runner.test.js"
+    "test:workflows": "tsc -p tests/workflows/tsconfig.json && node --test tests/workflows/dist/tests/workflows/runner.test.js",
+    "test:metering": "tsc -p tests/metering/tsconfig.json && node --require ./tests/metering/alias.cjs --test tests/metering/dist/tests/metering/usage.test.js tests/metering/dist/tests/metering/quota.test.js"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.1.0",
