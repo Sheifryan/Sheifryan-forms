@@ -30,17 +30,114 @@ export const GENERATED_FIELD_TYPES = [
 
 const CHOICE_TYPES = new Set(["single_select", "multi_select", "dropdown"]);
 
+/**
+ * Option labels for choice fields.
+ *
+ * The prompt asks the model to omit `options` on non-choice types, but it
+ * usually echoes the key anyway — as `"options": []`. `.optional()` forgives a
+ * MISSING key, never an empty array, so every one of those fields produced a
+ * `too_small` issue and the whole reply was rejected (both attempts, then a 502
+ * that dumped the raw Zod issue array into the builder UI). Normalise here:
+ * trim labels, drop blanks, and treat "nothing usable" as absent.
+ *
+ * Choice fields left without options fall back to the two default labels in
+ * `toFormField` below, so nothing is lost.
+ */
+const optionLabels = z.preprocess((value) => {
+  if (!Array.isArray(value)) return value;
+  const cleaned = value
+    .map((option) => (typeof option === "string" ? option.trim() : option))
+    .filter((option) => typeof option !== "string" || option.length > 0);
+  return cleaned.length === 0 ? undefined : cleaned;
+}, z.array(z.string().min(1).max(120)).min(1).max(12).optional());
+
+/**
+ * Common synonyms the model uses when it drifts from the catalogue.
+ *
+ * The prompts ask for the exact type strings and the model usually complies —
+ * but a measured paper-form import came back with `"type":"text"` and
+ * `"type":"radio"`, which failed the enum and rejected the whole reply (twice,
+ * then a 502). Map the synonyms onto the catalogue first; anything genuinely
+ * unknown still fails, so we never silently guess a field's behaviour.
+ */
+const TYPE_ALIASES: Record<string, (typeof GENERATED_FIELD_TYPES)[number]> = {
+  text: "short_text",
+  string: "short_text",
+  input: "short_text",
+  textfield: "short_text",
+  line: "short_text",
+  name: "short_text",
+  paragraph: "long_text",
+  textarea: "long_text",
+  text_area: "long_text",
+  multiline: "long_text",
+  free_text: "long_text",
+  comment: "long_text",
+  email_address: "email",
+  mail: "email",
+  tel: "phone",
+  telephone: "phone",
+  mobile: "phone",
+  numeric: "number",
+  integer: "number",
+  amount: "number",
+  link: "url",
+  website: "url",
+  radio: "single_select",
+  radios: "single_select",
+  radio_group: "single_select",
+  radiogroup: "single_select",
+  choice: "single_select",
+  select: "single_select",
+  single_choice: "single_select",
+  checkboxes: "multi_select",
+  checkbox_group: "multi_select",
+  multiple: "multi_select",
+  multiple_choice: "multi_select",
+  multi: "multi_select",
+  multiselect: "multi_select",
+  multi_select_group: "multi_select",
+  dropdown_list: "dropdown",
+  combo: "dropdown",
+  combobox: "dropdown",
+  star: "rating",
+  stars: "rating",
+  scale: "rating",
+  calendar: "date",
+  datepicker: "date",
+  date_picker: "date",
+  clock: "time",
+  timepicker: "time",
+  consent: "checkbox",
+  boolean: "checkbox",
+  yes_no: "checkbox",
+  yesno: "checkbox",
+  toggle: "checkbox",
+  attachment: "file",
+  upload: "file",
+  file_upload: "file",
+  document: "file",
+  image: "file",
+  photo: "file",
+};
+
+const normalizedType = z.preprocess((value) => {
+  if (typeof value !== "string") return value;
+  const key = value.trim().toLowerCase().replace(/[\s-]+/g, "_");
+  return TYPE_ALIASES[key] ?? key;
+}, z.enum(GENERATED_FIELD_TYPES));
+
 export const fieldOutputSchema = z.object({
   // Optional so the model can echo existing ids back when it's editing a form
   // in place (AI review/improve). Ignored for brand-new generations.
   id: z.string().min(1).max(20).optional(),
-  type: z.enum(GENERATED_FIELD_TYPES),
+  type: normalizedType,
   label: z.string().min(1).max(140),
   required: z.boolean().default(false),
   helpText: z.string().max(400).optional(),
   placeholder: z.string().max(200).optional(),
   // Option labels for choice fields (single_select / multi_select / dropdown).
-  options: z.array(z.string().min(1).max(120)).min(1).max(12).optional(),
+  options: optionLabels,
 });
 
 export type FieldOutput = z.infer<typeof fieldOutputSchema>;
@@ -49,7 +146,10 @@ export const formDraftSchema = z.object({
   title: z.string().min(1).max(140),
   description: z.string().max(600).optional(),
   confirmationMessage: z.string().max(400).optional(),
-  fields: z.array(fieldOutputSchema).min(1).max(20),
+  // 60 rather than 20: a real paper form (or a Word/PDF import) routinely has
+  // more questions than a prompt-generated one, and the model returns them in a
+  // single reply. The generation prompt still asks for 3-15.
+  fields: z.array(fieldOutputSchema).min(1).max(60),
 });
 
 export type FormDraftOutput = z.infer<typeof formDraftSchema>;

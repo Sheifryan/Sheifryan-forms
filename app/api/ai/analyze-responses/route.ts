@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { createClient, createServiceClient } from "@/lib/supabase/server";
 import { aiConfigured, aiRateLimited, completeJSON } from "@/lib/ai/client";
 import { buildAnalysisPrompt } from "@/lib/ai/prompts";
+import { canAnalyseForm } from "@/lib/ai/analysis/access";
+import { aiErrorMessage } from "@/lib/ai/errors";
 import { buildResponseDigest } from "@/lib/ai/answers";
 import { analysisSchema, type AnalysisResult } from "@/lib/ai/contracts";
 import type { FormField, FormSchema } from "@/lib/schema";
@@ -33,13 +35,14 @@ export async function POST(request: Request) {
   const formId = typeof body?.formId === "string" ? body.formId : "";
   if (!formId) return NextResponse.json({ error: "Missing form id" }, { status: 400 });
 
+  // Ownership gate: the caller must be allowed to read this form's responses —
+  // either it is their own form, or they hold 'responses.read' in its workspace.
   const { data: form } = await supabase
     .from("forms")
-    .select("id, owner_id, title, description, schema")
+    .select("id, owner_id, workspace_id, title, description, schema")
     .eq("id", formId)
-    
     .single();
-  if (!form) {
+  if (!form || !(await canAnalyseForm(supabase, form, user.id))) {
     return NextResponse.json({ error: "Form not found" }, { status: 404 });
   }
 
@@ -105,7 +108,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ analysis: saved }, { status: 200 });
   } catch (err) {
     console.error("[ai/analyze-responses]", err);
-    const message = err instanceof Error ? err.message : "The AI analysis failed. Try again.";
+    const message = aiErrorMessage(err, "The AI analysis failed. Try again.");
     return NextResponse.json({ error: message }, { status: 502 });
   }
 }

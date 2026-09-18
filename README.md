@@ -52,8 +52,13 @@ via **Terminal → Run Task**.
    **in order**:
    - Open the SQL editor in your Supabase dashboard
    - Run every file from `supabase/migrations/0001_init.sql` through
-     `supabase/migrations/0018_personal_workspace_repair.sql`, in numeric order
+     `supabase/migrations/0019_backfill_forms_workspace.sql`, in numeric order
    - (Or, if you use the Supabase CLI: `supabase db push`)
+   - (Or straight over Postgres: set `SUPABASE_DB_PASSWORD` + `DATABASE_URL` in
+     `.env.local` — see `.env.local.example` — and run
+     `PGPASSWORD="$SUPABASE_DB_PASSWORD" psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f supabase/migrations/<file>.sql`.
+     Use the pooler URL with the `postgres.<project-ref>` username: the direct
+     `db.<ref>.supabase.co` host is IPv6-only on many networks.)
 
    Every migration is idempotent (`if not exists` / `create or replace`), so
    re-running any of them is safe.
@@ -95,6 +100,16 @@ via **Terminal → Run Task**.
      Supabase → Settings → API
    - `SUPABASE_SERVICE_ROLE_KEY` — same page. **Never** expose this to the
      client; it's only read in server-only route handlers.
+   - `AI_API_KEY` / `AI_BASE_URL` / `AI_MODEL` — any OpenAI-compatible chat API
+     (the defaults target DeepSeek). These are **server-only** and power the AI
+     form builder, the **form importer** (photos/PDF/Word), the pre-publish
+     review, the Analytics "Generate insights" run and the Responses →
+     **AI Analysis** tab. Without them every AI route answers
+     `503 AI isn't configured yet` — which looks like the buttons doing
+     nothing. Note this when deploying: Vercel/Coolify read the dashboard env,
+     not a local `.env` (which is gitignored and dockerignored).
+   - `AI_VISION_MODEL` — *optional* pin for reading uploaded form images. Unset
+     means `AI_MODEL` is used (the default model reads images fine).
 
 5. **Run it**
    ```
@@ -178,6 +193,47 @@ Delivery attempts are logged in the `webhook_deliveries` table and viewable in
 the Integrations tab (status code, latency, error). Add a webhook, hit **Test**,
 and check **Recent deliveries** to confirm everything works end-to-end.
 
+## Workflows
+
+Workflows live under **Workflows** in the sidebar: pick a form (or leave it as
+"any form"), then choose up to five actions to run when a response arrives.
+
+| Action | What it does |
+| --- | --- |
+| `update_status` | Moves the response to New / In Progress / Completed / Archived |
+| `assign_response` | Assigns it to an active workspace member |
+| `notify_team` | Writes to the header bell (everyone, or chosen members) |
+| `webhook` | POSTs the same signed submission payload the form-level webhooks send |
+| `email_notification` | Emails you (or an address you set) about the response |
+| `confirmation_email` | Emails the respondent, when the form collected their address |
+
+The runtime is `lib/workflows.ts`, called from the submit route right after the
+response is written. Three things worth knowing:
+
+- **Best-effort, exactly like webhooks.** Each action is isolated, so a bad URL
+  or a missing email key is recorded in the run log and the respondent's
+  submission still succeeds.
+- **Exactly once per response.** `workflow_runs` carries a unique
+  `(workflow_id, response_id)`, so a retried submission can never assign or
+  email twice. Each run stamps `last_run_at` and writes a `workflow.ran` entry to
+  the activity feed (with a null actor — nobody signed in triggered it).
+- **Metered.** A run costs 1 credit, matching the wallet's "1 credit = 1
+  workflow run". A workspace that can't afford it simply isn't charged; the
+  workflow still runs.
+
+Email needs `RESEND_API_KEY` plus a sender address: `DEFAULT_FROM_EMAIL`
+(preferred, and it may use the `Name <address>` form) or `SERVER_EMAIL`.
+`NOTIFY_FROM_EMAIL` is still honoured first for backwards compatibility — it is
+the name the `notify-submission` Edge Function reads, and that function does
+**not** read the app's `.env` (set its secrets in Supabase separately). The
+sending domain must be verified in Resend. With no key or no sender the email
+actions report *"email is not configured"* / *"no sender configured"* in the run
+log instead of failing a submission, and **each email sent costs 1 credit** —
+charged only when it actually went out.
+
+`notifications` and `workflow_runs` arrive in `0020_workflow_execution.sql`;
+apply it with the other migrations (see Setup).
+
 ## How it's structured
 
 - `components/AppShell.tsx` — the sidebar shell (Home / Submissions /
@@ -218,6 +274,16 @@ and check **Recent deliveries** to confirm everything works end-to-end.
 - `app/dashboard/` — the **Home** page: a hero with quick-create chips and
   template gallery modal, a **Recent forms** grid (the 4 most recently updated
   forms for quick access) linking to `/forms`, workspace overview stats.
+  "Create with AI" opens a modal with two modes: **describe** a form, or
+  **upload** an existing one.
+- `app/api/ai/import-form/` + `lib/ai/import/extract.ts` — **import an existing
+  form**: photos/scans, a PDF or a Word document become real, editable fields.
+  Photos go to the vision-capable model as page images (the browser downscales
+  them first); PDFs are read with `pdfjs-dist` (falling back to their embedded
+  page JPEGs when there is no text layer, i.e. a scan) and `.docx` with
+  `mammoth`, keeping each table row as "label | answer". Uploaded bytes are
+  processed in memory and discarded — nothing is written to storage or the
+  database.
 - `app/forms/` — the **All forms** page: every form as a folder-filterable,
   drag-to-folder grid with create (scoped to the active folder when browsing
   one), delete, and drag-to-move; uses the shared template gallery modal.
@@ -225,12 +291,25 @@ and check **Recent deliveries** to confirm everything works end-to-end.
   pattern as forms. Deleting a folder doesn't delete its forms — they fall
   back to Uncategorized automatically (`on delete set null` on
   `forms.folder_id`).
-- `app/submissions/` and `app/analytics/` — real per-form data: a
+- `app/responses/` and `app/analytics/` — real per-form data: a
   searchable response table with CSV export, and KPI cards / charts
-  computed from actual response rows.
+  computed from actual response rows. `/responses` also hosts the
+  **AI Analysis** tab ("Ask your data", `/api/ai/ask`), which answers
+  plain-English questions about ONE form's submissions and can export the
+  underlying rows (`/api/ai/ask/export`). `app/submissions/` is now only a
+  redirect to `/responses`.
 - `app/f/[id]/` — the public form. Pre-checks closure conditions and the
   password gate before rendering anything, so visitors see a clear message
   instead of filling out a form that will reject them on submit.
+- `app/workflows/` + `lib/workflows.ts` + `app/api/workflows/route.ts` —
+  **workflows**: a trigger (a new response on one form, or on any form in the
+  workspace) plus up to five ordered actions. The route is the CRUD surface and
+  `runWorkflows()` is the runtime, invoked by the submit route. Each run is
+  recorded in `workflow_runs` (which doubles as the exactly-once guard), audited
+  as `workflow.ran`, metered one credit, and delivered to people through
+  `notifications` — the header bell in `components/NotificationsBell.tsx`.
+- `app/api/notifications/route.ts` — the bell's API: latest 20 for the caller
+  plus an unread count, and "mark read" for one or all.
 - `app/api/forms/[id]/submit/route.ts` — re-validates every submission
   server-side against the form's schema, checks the form is published,
   **enforces the password gate, `closeDate`, and `maxResponses`** (the

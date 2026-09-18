@@ -38,6 +38,7 @@ export type ActivityAction =
   | "workflow.toggled"
   | "workflow.duplicated"
   | "workflow.deleted"
+  | "workflow.ran"
   | "file.deleted"
   | "billing.plan_changed"
   | "billing.credits_purchased";
@@ -76,6 +77,14 @@ export async function logActivity(input: LogActivityInput): Promise<void> {
   }
 }
 
+/**
+ * Log an action that has no signed-in actor — see lib/system-activity.ts.
+ *
+ * Split out because the workflow runner (a public, session-less request path)
+ * must not drag next/headers into its import graph.
+ */
+export { logSystemActivity, type SystemActivityInput } from "./system-activity";
+
 /** Human-readable verb for an action, used by the activity feed. */
 export function activityVerb(action: string): string {
   const verbs: Record<string, string> = {
@@ -107,6 +116,7 @@ export function activityVerb(action: string): string {
     "workflow.toggled": "toggled a workflow",
     "workflow.duplicated": "duplicated a workflow",
     "workflow.deleted": "deleted a workflow",
+    "workflow.ran": "ran a workflow",
     "file.deleted": "deleted a file",
     "billing.plan_changed": "changed the subscription plan",
     "billing.credits_purchased": "purchased credits",

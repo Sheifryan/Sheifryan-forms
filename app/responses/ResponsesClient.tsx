@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Calendar, Download, Eye, Inbox, MessageSquare, Paperclip, Search, Trash2 } from "lucide-react";
+import { Calendar, Download, Eye, Inbox, MessageSquare, Paperclip, Search, Sparkles, Trash2 } from "lucide-react";
+import { AiAnalysisPanel } from "@/components/ai-analysis/AiAnalysisPanel";
 import { useToast } from "@/components/Toast";
 import { formatBytes } from "@/lib/format";
 import { useFormat } from "@/components/FormatProvider";
@@ -102,6 +103,8 @@ export function ResponsesClient({
   const [openId, setOpenId] = useState<string | null>(initialOpenId ?? null);
   const [signedUrls, setSignedUrls] = useState<Record<string, string>>({});
   const [deleteTarget, setDeleteTarget] = useState<ResponseRow | null>(null);
+  // The raw response table, or the "Ask your data" AI panel for one form.
+  const [view, setView] = useState<"responses" | "ai">("responses");
 
   const activeForm = forms.find((f) => f.id === activeFormId) || null;
   const fields = useMemo(() => activeForm?.schema?.fields ?? [], [activeForm]);
@@ -189,8 +192,28 @@ export function ResponsesClient({
         <MetricCard label="Completion rate" value={`${metrics.completionRate}%`} tint="text-slate-600 dark:text-inkDark" note="responses with answers vs. total" />
       </div>
 
-      {/* Toolbar */}
+      {/* Responses vs. AI Analysis. The AI panel answers questions about ONE
+          form at a time, so it reuses the same (workspace-scoped) selector. */}
       <div className="mt-5 flex flex-wrap items-center gap-2.5">
+        <div className="flex items-center gap-1 rounded-lg bg-white p-1 shadow-sm ring-1 ring-line dark:bg-panelDark dark:ring-lineDark">
+          <button
+            onClick={() => setView("responses")}
+            className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 font-body text-xs font-semibold transition ${
+              view === "responses" ? "bg-signal text-white" : "text-slate-500 hover:text-ink dark:text-mutedDark dark:hover:text-inkDark"
+            }`}
+          >
+            <Inbox size={12} /> Responses
+          </button>
+          <button
+            onClick={() => setView("ai")}
+            className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 font-body text-xs font-semibold transition ${
+              view === "ai" ? "bg-signal text-white" : "text-slate-500 hover:text-ink dark:text-mutedDark dark:hover:text-inkDark"
+            }`}
+          >
+            <Sparkles size={12} /> AI Analysis
+          </button>
+        </div>
+
         <select
           value={activeFormId ?? ""}
           onChange={(e) => {
@@ -200,6 +223,7 @@ export function ResponsesClient({
             if (e.target.value) params.set("form", e.target.value);
             router.push(`/responses?${params.toString()}`);
           }}
+          title="Form"
           className="rounded-md border border-line bg-white px-2.5 py-2 font-body text-xs font-medium text-ink outline-none focus:border-signal dark:border-lineDark dark:bg-panelDark dark:text-inkDark"
         >
           <option value="">All forms</option>
@@ -209,7 +233,20 @@ export function ResponsesClient({
             </option>
           ))}
         </select>
+      </div>
 
+      {view === "ai" ? (
+        activeForm ? (
+          <div className="mt-5">
+            <AiAnalysisPanel key={activeForm.id} formId={activeForm.id} formTitle={activeForm.title} />
+          </div>
+        ) : (
+          <AiAnalysisEmptyState hasForms={forms.length > 0} />
+        )
+      ) : (
+        <>
+      {/* Toolbar */}
+      <div className="mt-5 flex flex-wrap items-center gap-2.5">
         <div className="relative">
           <Search size={13} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 dark:text-mutedDark" />
           <input
@@ -301,6 +338,8 @@ export function ResponsesClient({
             </div>
           </div>
         </div>
+      )}
+        </>
       )}
     </div>
   );
@@ -651,6 +690,25 @@ function ResponsesEmptyState({ hasForms, onClear }: { hasForms: boolean; onClear
           Clear filters
         </button>
       )}
+    </div>
+  );
+}
+
+/** Shown in the AI Analysis tab when no single form is selected (or none exist). */
+function AiAnalysisEmptyState({ hasForms }: { hasForms: boolean }) {
+  return (
+    <div className="mt-5 rounded-xl border-2 border-dashed border-line bg-white p-12 text-center dark:border-lineDark dark:bg-panelDark">
+      <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-signalSoft/20">
+        <Sparkles size={24} className="text-signal" />
+      </div>
+      <h3 className="font-display text-lg font-semibold text-ink dark:text-inkDark">
+        {hasForms ? "Pick a form to analyse" : "No forms yet"}
+      </h3>
+      <p className="mx-auto mt-1.5 max-w-md font-body text-sm text-slate-500 dark:text-mutedDark">
+        {hasForms
+          ? "Choose a form above, then ask questions about its submissions — the AI answers with counts, tables and charts."
+          : "Create a form and collect responses first, then ask questions about them here."}
+      </p>
     </div>
   );
 }

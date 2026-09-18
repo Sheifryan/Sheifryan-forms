@@ -139,8 +139,10 @@ export default async function ResponsesPage({ searchParams }: { searchParams: { 
   }
 
   // Default form selector uses the URL param, else the first form with
-  // responses, else whatever's first.
-  const defaultFormId = searchParams.form ?? (formIds.length ? formIds[0] : null);
+  // responses, else whatever's first. The URL param is only honoured when it
+  // names one of THIS workspace's forms (activeFormId above already validated
+  // it), otherwise the AI Analysis tab would open on a form it can't read.
+  const defaultFormId = activeFormId ?? (formIds.length ? formIds[0] : null);
 
   return (
     <AppShell

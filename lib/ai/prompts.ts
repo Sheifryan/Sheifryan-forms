@@ -25,6 +25,9 @@ RULES:
 - Ask questions a real person would want to answer. Combine "Full name" +
   separate "Email" fields rather than one free-text blob.
 - Give choice questions concrete, mutually exclusive, short options.
+- Include "options" ONLY on single_select / multi_select / dropdown (2-8 short
+  labels). Omit the key completely on every other type — never send an empty
+  options array.
 - Mark "required" only for answers you truly need.
 - Never invent types outside the catalogue. Never return page_break or payment.
 - Every reply is a JSON object. No markdown, no commentary outside the JSON.`;
@@ -47,7 +50,7 @@ Reply with JSON in EXACTLY this shape:
       "required": true or false,
       "helpText": "tiny helper shown under the question (optional)",
       "placeholder": "example answer shown in the box (optional)",
-      "options": ["Option A", "Option B"]  // REQUIRED for choice types
+      "options": ["Option A", "Option B"]  // choice types ONLY; omit this key entirely otherwise
     }
   ]
 }
@@ -134,7 +137,7 @@ Reply with JSON in EXACTLY this shape:
       "required": true or false,
       "helpText": "optional",
       "placeholder": "optional",
-      "options": ["Option A", "Option B"]  // REQUIRED for choice types
+      "options": ["Option A", "Option B"]  // choice types ONLY; omit this key entirely otherwise
     }
   ]
 }
@@ -148,6 +151,78 @@ payment or page_break fields.`;
     2
   )}\n\nReviewer notes to address:\n${critiqueSummary}\n\nReturn the improved JSON.`;
   return { system, user };
+}
+
+// ---------------------------------------------------------------------------
+// Import an existing form (photo/scan, PDF or Word document)
+// ---------------------------------------------------------------------------
+
+export interface ImportSource {
+  /** How the document was read, for the model's framing. */
+  kind: "image" | "pdf_text" | "docx_text" | "plain_text";
+  /** Extracted text ("" when the input is page images only). */
+  text?: string;
+  /** Number of page images attached to the message. */
+  pageCount?: number;
+  /** Optional owner note, e.g. "keep the Ugandan phone format". */
+  hint?: string;
+}
+
+export function buildImportPrompt(source: ImportSource): { system: string; user: string } {
+  const system = `You convert an EXISTING form — a photo or scan, a PDF, or a Word document — into a
+machine-readable form definition. You describe ONLY the questions the document actually asks.
+
+${CATALOGUE}
+
+Reply with JSON in EXACTLY this shape:
+{
+  "title": "the document's own heading",
+  "description": "one sentence describing what the form is for (optional)",
+  "confirmationMessage": "short thank-you shown after submitting (optional)",
+  "fields": [
+    {
+      "type": "one of the catalogue types — use these exact strings",
+      "label": "the question text, verbatim",
+      "required": true or false,
+      "helpText": "printed guidance for that question (optional)",
+      "placeholder": "example answer printed on the form (optional)",
+      "options": ["Option A", "Option B"]  // choice types ONLY; omit this key entirely otherwise
+    }
+  ]
+}
+
+READING RULES
+- Copy each label exactly as printed. Fix only obvious OCR spacing. Keep the document's language.
+- NEVER use a type name that is not in the catalogue: no "text", no "radio", no "select".
+  A single-line answer is "short_text"; a list of choices with circles or boxes is
+  "single_select"; a question where several answers may be ticked is "multi_select".
+- Every choice question MUST list all printed options in "options", in the printed order.
+- A small printed set of answers (Yes/No, Male/Female, 1-4) means it is a choice, not free text.
+- Ignore logos, addresses, headers/footers, page numbers, instructions, and signature /
+  "office use only" blocks that the office fills in.
+- Question numbers ("3.", "Q4") and bullet points are not part of the label.
+- "Amount", "quantity", "age", "number of ..." -> number. Calendar dates -> date. Clock times -> time.
+- "Upload"/"attach"/"attach a photo" -> file. One consent or declaration sentence -> checkbox.
+- required: true only when the document clearly demands it (asterisk, "required", bold or boxed).
+- Keep the document's order. Do not turn section headings into questions.
+- title: the document's own heading (e.g. "Student Registration Form 2026"), not a description.
+- Never invent questions to reach a certain number, and never drop one that is there.
+
+Reply with JSON only. No markdown, no commentary.`;
+
+  const parts: string[] = [];
+  if (source.pageCount) {
+    parts.push(
+      `Attached: ${source.pageCount} page image${source.pageCount === 1 ? "" : "s"} of the form, in page order.`
+    );
+  }
+  if (source.text) {
+    const label = source.kind === "docx_text" ? "Word document" : source.kind === "pdf_text" ? "PDF" : "file";
+    parts.push(`Text extracted from the ${label}:\n\n${source.text}`);
+  }
+  if (source.hint) parts.push(`The owner added: ${source.hint}`);
+  parts.push("Convert this form into the JSON definition.");
+  return { system, user: parts.join("\n\n") };
 }
 
 // ---------------------------------------------------------------------------

@@ -2,7 +2,8 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Bell, ChevronDown, LogOut, Menu, Moon, Sun, UserRound } from "lucide-react";
+import { ChevronDown, LogOut, Menu, Moon, Sun, UserRound } from "lucide-react";
+import { NotificationsBell } from "@/components/NotificationsBell";
 import { createClient } from "@/lib/supabase/client";
 import { applyTheme, type ThemeChoice } from "@/lib/theme";
 import { useToast } from "@/components/Toast";
@@ -146,14 +147,9 @@ export function AppHeader({ title, greeting = false, userName, userEmail, worksp
           <Moon size={15} className="dark:hidden" />
         </button>
 
-        <button
-          type="button"
-          className="flex h-8 w-8 items-center justify-center rounded-md border border-line text-slate-500 transition hover:bg-paper dark:border-lineDark dark:text-mutedDark dark:hover:bg-panelDark"
-          aria-label="Notifications"
-        >
-          <Bell size={15} />
-          <span className="absolute right-1 top-1 h-1.5 w-1.5 rounded-full bg-signal nibble-pulse" />
-        </button>
+        {/* Real notifications, written by the `notify_team` workflow action.
+            This used to be a decorative bell with a permanently-on dot. */}
+        <NotificationsBell />
 
         <div className="relative" ref={menuRef}>
           <button

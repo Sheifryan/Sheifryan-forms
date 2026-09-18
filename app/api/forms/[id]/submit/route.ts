@@ -14,6 +14,7 @@ import {
   type PaymentFieldConfig,
 } from "@/lib/schema";
 import { buildSubmissionPayload, deliverWebhook, webhooksForEvent } from "@/lib/webhooks";
+import { runWorkflows } from "@/lib/workflows";
 import { buildPaymentAnswer, initiateCollection, marzpayConfigured } from "@/lib/marzpay";
 import { isUgMobileMoneyPhone, normalizeUgPhone } from "@/lib/phone";
 
@@ -63,7 +64,7 @@ async function handleSubmit(request: Request, id: string) {
   const supabase = createClient();
   const { data: form, error: formError } = await supabase
     .from("forms")
-    .select("id, title, schema, schema_version, status, settings")
+    .select("id, title, schema, schema_version, status, settings, workspace_id")
     .eq("id", id)
     .single();
 
@@ -200,6 +201,21 @@ async function handleSubmit(request: Request, id: string) {
       }
     });
   }
+
+  // Fire "new response" workflows. These are the 0011 trigger/action rows that
+  // /api/workflows manages; lib/workflows.ts is the runtime. Best-effort in
+  // exactly the same way as the webhooks above: the response is already
+  // recorded, so a broken action is logged and nothing more.
+  await runWorkflows(service, {
+    formId: form.id,
+    workspaceId: (form as { workspace_id?: string | null }).workspace_id ?? null,
+    responseId: inserted.id,
+    answers: result.data,
+    schema: form.schema as FormSchema,
+    formTitle: form.title,
+    schemaVersion: Number(form.schema_version ?? 1),
+    notifyEmail: typeof settings?.notifyEmail === "string" ? settings.notifyEmail : null,
+  }).catch((err) => console.error("[submit] workflows:", err));
 
   return NextResponse.json({
     ok: true,
