@@ -71,7 +71,7 @@ export function SignupForm() {
             E
           </div>
           <span className="font-display text-[15px] font-bold text-ink">
-            Easy<span className="text-signal">Form</span>
+            Nibble<span className="text-signal">Forms</span>
           </span>
         </div>
         <h1 className="mb-1 font-display text-xl text-ink">Create an account</h1>

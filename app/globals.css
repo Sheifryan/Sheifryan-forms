@@ -115,3 +115,14 @@ html.dark * {
 .nibble-pulse {
   animation: nibble-pulse 1.6s ease-in-out infinite;
 }
+
+/* Marketing pages: without scripting, framer-motion's server-rendered
+   `initial` styles (opacity: 0) would leave every revealed section invisible.
+   Force the content visible — the markup is identical, just unanimated. */
+@media (scripting: none) {
+  [data-reveal] {
+    opacity: 1 !important;
+    transform: none !important;
+  }
+}
+

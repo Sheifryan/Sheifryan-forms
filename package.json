@@ -1,5 +1,5 @@
 {
-  "name": "easyform",
+  "name": "nibbleforms",
   "version": "0.1.0",
   "private": true,
   "scripts": {
@@ -21,6 +21,7 @@
     "@dnd-kit/utilities": "^3.2.2",
     "@supabase/ssr": "^0.5.1",
     "@supabase/supabase-js": "^2.45.4",
+    "framer-motion": "^12.43.0",
     "lucide-react": "^0.383.0",
     "mammoth": "^1.12.3",
     "nanoid": "^5.0.7",

@@ -1,4 +1,4 @@
-# EasyForm
+# NibbleForms
 
 A form builder: sidebar app shell, folders to organize forms (with
 drag-and-drop), a tabbed builder (Fields / Rules / Settings / Themes /
@@ -8,6 +8,13 @@ QR codes, server-enforced response limits and close dates,
 server-validated public submissions, a Submissions table with CSV export, an
 Analytics dashboard, and Supabase auth + Postgres (RLS-enforced
 multi-tenancy).
+
+> **Naming note.** The product is **NibbleForms**. Four identifiers keep the
+> older "EasyForm" name on purpose, because they are public contracts and
+> renaming them would break live integrations and existing sessions:
+> `public/widgets/easyform.js` (the embed script URL), `window.EasyForm`
+> (its global), the `easyform:resize` event, and the `easyform_pw_<formId>`
+> cookie set by the password gate.
 
 ## Running in VS Code
 
