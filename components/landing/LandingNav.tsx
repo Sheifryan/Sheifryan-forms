@@ -10,8 +10,8 @@ interface Props {
   /** Signed-in visitors get a "Go to dashboard" CTA instead of "Start building". */
   authed: boolean;
   /**
-   * True on `/`. On other public pages (/templates) the section links are
-   * rewritten to `/#features` so they still land somewhere real.
+   * True on `/`. On other public pages (/templates, /docs, /about) the section
+   * links are rewritten to `/#features` so they still land somewhere real.
    */
   onHome?: boolean;
 }
@@ -21,6 +21,13 @@ const SECTIONS = [
   { label: "Features", hash: "#features" },
   { label: "AI", hash: "#ai" },
   { label: "Pricing", hash: "#pricing" },
+];
+
+/** Standalone public pages, rendered after the section links. */
+const PAGES = [
+  { label: "Templates", href: "/templates" },
+  { label: "Docs", href: "/docs" },
+  { label: "About", href: "/about" },
 ];
 
 export function LandingNav({ authed, onHome = true }: Props) {
@@ -61,7 +68,7 @@ export function LandingNav({ authed, onHome = true }: Props) {
           </span>
         </Link>
 
-        <div className="ml-4 hidden items-center gap-1 md:flex">
+        <div className="ml-4 hidden items-center gap-1 lg:flex">
           {SECTIONS.map((s) => (
             <a
               key={s.label}
@@ -71,12 +78,15 @@ export function LandingNav({ authed, onHome = true }: Props) {
               {s.label}
             </a>
           ))}
-          <Link
-            href="/templates"
-            className="rounded-lg px-3 py-1.5 font-body text-[13px] font-medium text-slate-600 transition hover:bg-paper hover:text-ink dark:text-mutedDark dark:hover:bg-panelDark dark:hover:text-inkDark"
-          >
-            Templates
-          </Link>
+          {PAGES.map((page) => (
+            <Link
+              key={page.href}
+              href={page.href}
+              className="rounded-lg px-3 py-1.5 font-body text-[13px] font-medium text-slate-600 transition hover:bg-paper hover:text-ink dark:text-mutedDark dark:hover:bg-panelDark dark:hover:text-inkDark"
+            >
+              {page.label}
+            </Link>
+          ))}
         </div>
 
         <div className="ml-auto flex items-center gap-2">
@@ -93,7 +103,7 @@ export function LandingNav({ authed, onHome = true }: Props) {
           {!authed && (
             <Link
               href="/login"
-              className="hidden rounded-lg px-3 py-1.5 font-body text-[13px] font-medium text-ink transition hover:bg-paper sm:block dark:text-inkDark dark:hover:bg-panelDark"
+              className="hidden rounded-lg px-3 py-1.5 font-body text-[13px] font-medium text-ink transition hover:bg-paper dark:text-inkDark dark:hover:bg-panelDark sm:block"
             >
               Log in
             </Link>
@@ -110,7 +120,7 @@ export function LandingNav({ authed, onHome = true }: Props) {
             onClick={() => setOpen((v) => !v)}
             aria-label={open ? "Close menu" : "Open menu"}
             aria-expanded={open}
-            className="flex h-8 w-8 items-center justify-center rounded-lg border border-line text-slate-500 md:hidden dark:border-lineDark dark:text-mutedDark"
+            className="flex h-8 w-8 items-center justify-center rounded-lg border border-line text-slate-500 dark:border-lineDark dark:text-mutedDark lg:hidden"
           >
             {open ? <X size={16} /> : <Menu size={16} />}
           </button>
@@ -124,7 +134,7 @@ export function LandingNav({ authed, onHome = true }: Props) {
             animate={{ height: "auto", opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
             transition={{ duration: 0.22, ease: "easeOut" }}
-            className="overflow-hidden border-t border-line bg-white md:hidden dark:border-lineDark dark:bg-night"
+            className="overflow-hidden border-t border-line bg-white dark:border-lineDark dark:bg-night lg:hidden"
           >
             <div className="flex flex-col gap-1 px-5 py-3">
               {SECTIONS.map((s) => (
@@ -137,13 +147,16 @@ export function LandingNav({ authed, onHome = true }: Props) {
                   {s.label}
                 </a>
               ))}
-              <Link
-                href="/templates"
-                onClick={() => setOpen(false)}
-                className="rounded-lg px-3 py-2 font-body text-sm font-medium text-slate-600 dark:text-mutedDark"
-              >
-                Templates
-              </Link>
+              {PAGES.map((page) => (
+                <Link
+                  key={page.href}
+                  href={page.href}
+                  onClick={() => setOpen(false)}
+                  className="rounded-lg px-3 py-2 font-body text-sm font-medium text-slate-600 dark:text-mutedDark"
+                >
+                  {page.label}
+                </Link>
+              ))}
               <div className="mt-2 flex gap-2">
                 {!authed && (
                   <Link
