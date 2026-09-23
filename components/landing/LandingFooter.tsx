@@ -3,9 +3,9 @@ import Link from "next/link";
 /**
  * Public marketing footer.
  *
- * Every link points at a page or section that actually exists — there is no
- * /privacy, /terms, /about or docs site in this repo, and shipping links that
- * 404 would read as broken. Add the real pages first, then add the links.
+ * Every link points at a page or section that actually exists — /templates,
+ * /docs and /about are real routes, and the hash links resolve on the landing
+ * page. Shipping links that 404 reads as broken, so add the real page first.
  */
 const COLUMNS: { heading: string; links: { label: string; href: string }[] }[] = [
   {
@@ -22,8 +22,17 @@ const COLUMNS: { heading: string; links: { label: string; href: string }[] }[] =
     links: [
       { label: "Form builder", href: "/#product" },
       { label: "Templates", href: "/templates" },
-      { label: "Workflows & webhooks", href: "/#integrations" },
-      { label: "File collection", href: "/#security" },
+      { label: "Workflows & webhooks", href: "/docs#webhooks" },
+      { label: "Embed a form", href: "/docs#embedding" },
+    ],
+  },
+  {
+    heading: "Resources",
+    links: [
+      { label: "Documentation", href: "/docs" },
+      { label: "Webhook integration", href: "/docs#webhooks" },
+      { label: "Use cases", href: "/docs#use-cases" },
+      { label: "About us", href: "/about" },
     ],
   },
   {
@@ -41,7 +50,7 @@ export function LandingFooter() {
   return (
     <footer className="border-t border-line bg-white dark:border-lineDark dark:bg-panelDark">
       <div className="mx-auto max-w-6xl px-5 py-12">
-        <div className="grid gap-10 md:grid-cols-[1.4fr_repeat(3,1fr)]">
+        <div className="grid gap-10 md:grid-cols-[1.4fr_repeat(4,1fr)]">
           <div>
             <Link href="/" className="flex items-center gap-2">
               <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-gradient-to-br from-signal to-accent2 font-display text-[13px] font-bold text-white">
@@ -82,7 +91,7 @@ export function LandingFooter() {
           ))}
         </div>
 
-        <div className="mt-10 flex flex-col gap-2 border-t border-line pt-6 sm:flex-row sm:items-center sm:justify-between dark:border-lineDark">
+        <div className="mt-10 flex flex-col gap-2 border-t border-line pt-6 dark:border-lineDark sm:flex-row sm:items-center sm:justify-between">
           <p className="font-body text-[12px] text-slate-400 dark:text-mutedDark">
             © 2026 NibbleForms. All rights reserved.
           </p>
