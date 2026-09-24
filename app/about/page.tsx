@@ -20,9 +20,8 @@ export const metadata: Metadata = {
 /**
  * Public About page.
  *
- * Same shell as /templates and /docs: MotionProvider → LandingNav (with
- * `onHome={false}`, so section hashes link back to `/`) → content → the shared
- * FinalCta → LandingFooter. All figures in the sections come from
+ * Same shell as /templates and /docs: MotionProvider → LandingNav → content →
+ * the shared FinalCta → LandingFooter. All figures in the sections come from
  * components/landing/AboutSections.tsx, which derives them from lib/schema.ts
  * and lib/templates.ts.
  */
@@ -32,7 +31,7 @@ export default async function AboutPage() {
   return (
     <MotionProvider>
       <div className="min-h-screen bg-paper text-ink antialiased dark:bg-night dark:text-inkDark">
-        <LandingNav authed={authed} onHome={false} />
+        <LandingNav authed={authed} />
 
         <main>
           <AboutHero authed={authed} />

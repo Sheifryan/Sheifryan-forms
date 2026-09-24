@@ -9,28 +9,25 @@ import { applyTheme, type ThemeChoice } from "@/lib/theme";
 interface Props {
   /** Signed-in visitors get a "Go to dashboard" CTA instead of "Start building". */
   authed: boolean;
-  /**
-   * True on `/`. On other public pages (/templates, /docs, /about) the section
-   * links are rewritten to `/#features` so they still land somewhere real.
-   */
-  onHome?: boolean;
 }
 
-const SECTIONS = [
-  { label: "Product", hash: "#product" },
-  { label: "Features", hash: "#features" },
-  { label: "AI", hash: "#ai" },
-  { label: "Pricing", hash: "#pricing" },
-];
-
-/** Standalone public pages, rendered after the section links. */
+/**
+ * Every nav item is a real page. The old in-page hashes (#product, #features,
+ * #ai, #pricing) still exist as section ids on `/` so existing deep links keep
+ * working, but the nav no longer depends on them — which is why the previous
+ * `onHome` prefixing is gone.
+ */
 const PAGES = [
+  { label: "Product", href: "/product" },
+  { label: "Features", href: "/features" },
+  { label: "AI", href: "/ai" },
+  { label: "Pricing", href: "/pricing" },
   { label: "Templates", href: "/templates" },
   { label: "Docs", href: "/docs" },
   { label: "About", href: "/about" },
 ];
 
-export function LandingNav({ authed, onHome = true }: Props) {
+export function LandingNav({ authed }: Props) {
   const [scrolled, setScrolled] = useState(false);
   const [open, setOpen] = useState(false);
   const { scrollY } = useScroll();
@@ -45,8 +42,6 @@ export function LandingNav({ authed, onHome = true }: Props) {
     window.dispatchEvent(new Event("nibble:theme-changed"));
   }
 
-  const prefix = onHome ? "" : "/";
-  const homeHref = (hash: string) => `${prefix}${hash}`;
   const startHref = authed ? "/dashboard" : "/signup";
   const startLabel = authed ? "Go to dashboard" : "Start Building";
 
@@ -69,15 +64,6 @@ export function LandingNav({ authed, onHome = true }: Props) {
         </Link>
 
         <div className="ml-4 hidden items-center gap-1 lg:flex">
-          {SECTIONS.map((s) => (
-            <a
-              key={s.label}
-              href={homeHref(s.hash)}
-              className="rounded-lg px-3 py-1.5 font-body text-[13px] font-medium text-slate-600 transition hover:bg-paper hover:text-ink dark:text-mutedDark dark:hover:bg-panelDark dark:hover:text-inkDark"
-            >
-              {s.label}
-            </a>
-          ))}
           {PAGES.map((page) => (
             <Link
               key={page.href}
@@ -137,16 +123,6 @@ export function LandingNav({ authed, onHome = true }: Props) {
             className="overflow-hidden border-t border-line bg-white dark:border-lineDark dark:bg-night lg:hidden"
           >
             <div className="flex flex-col gap-1 px-5 py-3">
-              {SECTIONS.map((s) => (
-                <a
-                  key={s.label}
-                  href={homeHref(s.hash)}
-                  onClick={() => setOpen(false)}
-                  className="rounded-lg px-3 py-2 font-body text-sm font-medium text-slate-600 dark:text-mutedDark"
-                >
-                  {s.label}
-                </a>
-              ))}
               {PAGES.map((page) => (
                 <Link
                   key={page.href}

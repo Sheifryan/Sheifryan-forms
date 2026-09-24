@@ -25,7 +25,7 @@ export default async function TemplatesPage() {
   return (
     <MotionProvider>
       <div className="min-h-screen bg-paper text-ink antialiased dark:bg-night dark:text-inkDark">
-        <LandingNav authed={authed} onHome={false} />
+        <LandingNav authed={authed} />
         <main className="mx-auto max-w-6xl px-5 py-12 sm:py-16">
           <div className="mx-auto max-w-2xl text-center">
             <p className="font-mono text-[10.5px] uppercase tracking-[0.22em] text-signal dark:text-signalSoft">

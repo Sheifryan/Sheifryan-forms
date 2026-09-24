@@ -11,16 +11,16 @@ const COLUMNS: { heading: string; links: { label: string; href: string }[] }[] =
   {
     heading: "Product",
     links: [
-      { label: "Features", href: "/#features" },
-      { label: "AI insights", href: "/#ai" },
-      { label: "Security", href: "/#security" },
-      { label: "Pricing", href: "/#pricing" },
+      { label: "Features", href: "/features" },
+      { label: "AI insights", href: "/ai" },
+      { label: "Security", href: "/features#security" },
+      { label: "Pricing", href: "/pricing" },
     ],
   },
   {
     heading: "Build with",
     links: [
-      { label: "Form builder", href: "/#product" },
+      { label: "Form builder", href: "/product" },
       { label: "Templates", href: "/templates" },
       { label: "Workflows & webhooks", href: "/docs#webhooks" },
       { label: "Embed a form", href: "/docs#embedding" },

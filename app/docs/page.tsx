@@ -230,11 +230,10 @@ function SectionBlock({ section, index }: { section: DocSection; index: number }
 /**
  * Public documentation.
  *
- * Same shell as /templates: MotionProvider → LandingNav → LandingFooter, with
- * `onHome={false}` so the nav's section hashes become `/#features` links that
- * still land somewhere real. The content is server-rendered from lib/docs.ts;
- * only the sticky sidebar is a client component, and it receives the slim
- * section/article list rather than the article bodies.
+ * Same shell as /templates: MotionProvider → LandingNav → LandingFooter.
+ * The content is server-rendered from lib/docs.ts; only the sticky sidebar is a
+ * client component, and it receives the slim section/article list rather than
+ * the article bodies.
  */
 export default async function DocsPage() {
   const authed = await isSignedIn();
@@ -242,7 +241,7 @@ export default async function DocsPage() {
   return (
     <MotionProvider>
       <div className="min-h-screen bg-paper text-ink antialiased dark:bg-night dark:text-inkDark">
-        <LandingNav authed={authed} onHome={false} />
+        <LandingNav authed={authed} />
 
         <main className="mx-auto max-w-6xl px-5 py-12 sm:py-16">
           <Reveal className="max-w-2xl">
